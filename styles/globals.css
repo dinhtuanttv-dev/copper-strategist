@@ -1,0 +1,179 @@
+/* ═══════════════════════════════════════════════════════
+   COPPER STRATEGIST — Global Styles
+   ═══════════════════════════════════════════════════════ */
+
+/* ─── Reset cơ bản ──────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── CSS Variables — Dark Mode (mặc định) ──────────────── */
+:root {
+  /* Màu nền */
+  --bg:        #080c14;
+  --card:      #0f1623;
+  --card2:     #162033;
+  --border:    #1a2a3a;
+
+  /* Màu chữ */
+  --text:      #e2e8f0;
+  --muted:     #5a7090;
+
+  /* Màu accent */
+  --green:     #22c55e;
+  --red:       #ef4444;
+  --amber:     #f59e0b;
+  --blue:      #3b82f6;
+  --teal:      #14b8a6;
+  --purple:    #8b5cf6;
+  --orange:    #f97316;
+  --cyan:      #06b6d4;
+
+  /* Font */
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  /* Border radius */
+  --radius:    8px;
+  --radius-lg: 12px;
+}
+
+/* ─── Light Mode ─────────────────────────────────────────── */
+[data-theme='light'] {
+  --bg:     #f0f4f8;
+  --card:   #ffffff;
+  --card2:  #e8edf5;
+  --border: #c8d4e0;
+  --text:   #1e2d3d;
+  --muted:  #7a90a8;
+}
+
+/* ─── Base ───────────────────────────────────────────────── */
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  background:  var(--bg);
+  color:       var(--text);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+  min-height:  100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ─── Scrollbar tùy chỉnh ────────────────────────────────── */
+::-webkit-scrollbar        { width: 4px; height: 4px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ─── Animations ─────────────────────────────────────────── */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 6px currentColor; }
+  50%       { box-shadow: 0 0 18px currentColor; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ─── Utility classes ────────────────────────────────────── */
+.fade-in  { animation: fadeIn  0.25s ease forwards; }
+.slide-in { animation: slideIn 0.2s ease forwards; }
+
+.font-mono { font-family: var(--font-mono); }
+.font-sans { font-family: var(--font-sans); }
+
+.text-green  { color: var(--green);  }
+.text-red    { color: var(--red);    }
+.text-amber  { color: var(--amber);  }
+.text-blue   { color: var(--blue);   }
+.text-teal   { color: var(--teal);   }
+.text-cyan   { color: var(--cyan);   }
+.text-purple { color: var(--purple); }
+.text-muted  { color: var(--muted);  }
+
+/* ─── Card component ─────────────────────────────────────── */
+.card {
+  background:    var(--card);
+  border:        1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding:       13px 15px;
+}
+
+.card2 {
+  background:    var(--card2);
+  border:        1px solid var(--border);
+  border-radius: var(--radius);
+  padding:       8px 10px;
+}
+
+/* ─── Button reset ───────────────────────────────────────── */
+button {
+  cursor:      pointer;
+  border:      none;
+  background:  transparent;
+  font-family: inherit;
+  font-size:   inherit;
+  color:       inherit;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* ─── Input reset ────────────────────────────────────────── */
+input, textarea, select {
+  font-family: inherit;
+  font-size:   inherit;
+  color:       var(--text);
+  background:  var(--card);
+  border:      1px solid var(--border);
+  border-radius: var(--radius);
+  outline:     none;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--blue);
+}
+
+/* ─── Recharts custom ────────────────────────────────────── */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: var(--border) !important;
+}
+
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+/* ─── Responsive ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  html { font-size: 14px; }
+
+  .hide-mobile { display: none !important; }
+}
+
+@media (min-width: 769px) {
+  .hide-desktop { display: none !important; }
+}
