@@ -3,8 +3,9 @@ import {
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip,
   AreaChart, Area, ComposedChart, Bar, Line,
 } from 'recharts';
-import Layout      from '../components/Layout';
-import RadarChart  from '../components/RadarChart';
+import Layout           from '../components/Layout';
+import RadarChart       from '../components/RadarChart';
+import FundamentalsTab  from '../components/FundamentalsTab';
 import { useRadarData } from '../hooks/useRadarData';
 import {
   A, calcVSA, calcElliott, calcTI, calcMH, calcVerdict,
@@ -74,14 +75,14 @@ const INIT = {
 
 // ─── Tooltip ──────────────────────────────────────────────────────────────────
 function TT({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
+  if (!active||!payload?.length) return null;
   return (
     <div style={{ background:'var(--card2)', border:'1px solid var(--border)',
       borderRadius:8, padding:'8px 12px', fontSize:11 }}>
       <div style={{ color:'var(--muted)', marginBottom:4 }}>{label}</div>
       {payload.map((p,i) => (
         <div key={i} style={{ color:p.color, marginBottom:2 }}>
-          {p.name}: <b>{typeof p.value==='number' ? p.value.toLocaleString() : p.value}</b>
+          {p.name}: <b>{typeof p.value==='number'?p.value.toLocaleString():p.value}</b>
         </div>
       ))}
     </div>
@@ -166,14 +167,14 @@ function SourceBadge({ source }) {
 function AutoRefreshBar({ nextPrice, nextFund, nextBS, loadPrice, loadInv, loadCOT, loadCal, loadBS }) {
   const [, setTick] = useState(0);
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t+1), 1000);
+    const id = setInterval(() => setTick(t=>t+1), 1000);
     return () => clearInterval(id);
   }, []);
 
   const items = [
-    { icon:'⚡', lbl:'Giá',    next:nextPrice, loading:loadPrice,                 interval:RF.price, col:A.cyan  },
-    { icon:'📦', lbl:'Cơ bản', next:nextFund,  loading:loadInv||loadCOT||loadCal, interval:RF.fund,  col:A.teal  },
-    { icon:'🦢', lbl:'BS',     next:nextBS,    loading:loadBS,                    interval:RF.bs,    col:A.red   },
+    { icon:'⚡', lbl:'Giá',    next:nextPrice, loading:loadPrice,                 interval:RF.price, col:A.cyan },
+    { icon:'📦', lbl:'Cơ bản', next:nextFund,  loading:loadInv||loadCOT||loadCal, interval:RF.fund,  col:A.teal },
+    { icon:'🦢', lbl:'BS',     next:nextBS,    loading:loadBS,                    interval:RF.bs,    col:A.red  },
   ];
 
   return (
@@ -184,7 +185,7 @@ function AutoRefreshBar({ nextPrice, nextFund, nextBS, loadPrice, loadInv, loadC
         ⏰ AUTO-REFRESH
       </span>
       {items.map((m,i) => {
-        const remaining = m.next ? Math.max(0, m.next - Date.now()) : 0;
+        const remaining = m.next ? Math.max(0, m.next-Date.now()) : 0;
         const pct       = m.next ? Math.min(100,(1-remaining/m.interval)*100) : 0;
         const mins      = Math.floor(remaining/60000);
         const secs      = Math.floor((remaining%60000)/1000);
@@ -192,7 +193,7 @@ function AutoRefreshBar({ nextPrice, nextFund, nextBS, loadPrice, loadInv, loadC
                         : remaining <= 0 ? '⟳ soon'
                         : mins > 0       ? `${mins}m ${String(secs).padStart(2,'0')}s`
                         : `${secs}s`;
-        const col = remaining<30000 ? A.orange : remaining<60000 ? A.amber : m.col;
+        const col = remaining<30000?A.orange:remaining<60000?A.amber:m.col;
         return (
           <div key={i} style={{ display:'flex', alignItems:'center', gap:6, flex:1, minWidth:120 }}>
             <span style={{ fontSize:9, color:'var(--muted)', flexShrink:0 }}>{m.icon} {m.lbl}</span>
@@ -201,9 +202,7 @@ function AutoRefreshBar({ nextPrice, nextFund, nextBS, loadPrice, loadInv, loadC
                 borderRadius:3, transition:'width 1s linear' }} />
             </div>
             <span style={{ fontSize:9, fontWeight:700, color:col, minWidth:52, textAlign:'right',
-              animation:m.loading?'pulse 1s ease-in-out infinite':'none' }}>
-              {label}
-            </span>
+              animation:m.loading?'pulse 1s ease-in-out infinite':'none' }}>{label}</span>
           </div>
         );
       })}
@@ -226,7 +225,7 @@ function TsBadge({ ts }) {
   if (!mounted) return <span style={{ fontSize:8, color:'var(--muted)' }}>–</span>;
   if (!ts) return <span style={{ fontSize:8, color:'var(--muted)', fontStyle:'italic' }}>Chưa cập nhật</span>;
   const sec = Math.floor((Date.now()-ts)/1000);
-  const c   = sec<300 ? A.green : sec<1800 ? A.amber : A.red;
+  const c   = sec<300?A.green:sec<1800?A.amber:A.red;
   return (
     <div style={{ display:'flex', alignItems:'center', gap:3 }}>
       <span style={{ width:4, height:4, borderRadius:'50%', background:c, display:'inline-block' }} />
@@ -250,8 +249,8 @@ function NewsPanel({ news, loading, onRefresh }) {
   return (
     <div>
       {news.map((n,i) => {
-        const col = n.direction==='bullish' ? A.green : n.direction==='bearish' ? A.red : A.amber;
-        const imp = n.impact==='high' ? A.red : n.impact==='medium' ? A.amber : A.teal;
+        const col = n.direction==='bullish'?A.green:n.direction==='bearish'?A.red:A.amber;
+        const imp = n.impact==='high'?A.red:n.impact==='medium'?A.amber:A.teal;
         return (
           <div key={i} style={{ background:'var(--card2)', border:`1px solid ${col}33`,
             borderRadius:8, padding:'7px 10px', marginBottom:5 }}>
@@ -300,10 +299,10 @@ function EconCalendar({ events }) {
   return (
     <div>
       {sorted.map((ev,i) => {
-        const ms   = ev.ts - now;
+        const ms   = ev.ts-now;
         const past = ms < 0;
         const abs  = Math.abs(ms);
-        const col  = ev.impact==='high' ? A.red : ev.impact==='medium' ? A.amber : A.teal;
+        const col  = ev.impact==='high'?A.red:ev.impact==='medium'?A.amber:A.teal;
         const hh   = String(Math.floor(abs/3600000)).padStart(2,'0');
         const mm   = String(Math.floor((abs%3600000)/60000)).padStart(2,'0');
         const ss   = String(Math.floor((abs%60000)/1000)).padStart(2,'0');
@@ -320,7 +319,7 @@ function EconCalendar({ events }) {
               </div>
               <div style={{ fontSize:12, fontWeight:800,
                 color:past?'var(--muted)':col, fontFamily:'var(--font-mono)' }}>
-                {past ? 'ĐÃ QUA' : `${hh}:${mm}:${ss}`}
+                {past?'ĐÃ QUA':`${hh}:${mm}:${ss}`}
               </div>
             </div>
             {!past && ev.note && (
@@ -410,44 +409,44 @@ export default function Home() {
   // ─── Patch helpers ─────────────────────────────────────────
   const patchPrice = useCallback(f => {
     setS(prev => {
-      const next = {...prev, ...f};
+      const next = {...prev,...f};
       const lbl  = new Date().toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit'});
       const pc   = [...prev.priceChart];
       const last = pc[pc.length-1];
-      if (last && last.d!==lbl) pc.push({d:lbl, comex:next.comex, vol:next.session_vol||91000});
-      else if (last) pc[pc.length-1] = {...last, comex:next.comex};
-      return {...next, priceChart:pc.slice(-14), syncVer:(prev.syncVer||0)+1};
+      if (last && last.d!==lbl) pc.push({d:lbl,comex:next.comex,vol:next.session_vol||91000});
+      else if (last) pc[pc.length-1] = {...last,comex:next.comex};
+      return {...next,priceChart:pc.slice(-14),syncVer:(prev.syncVer||0)+1};
     });
   }, []);
 
   const patchInv = useCallback(f => {
     setS(prev => {
-      const next = {...prev, ...f};
+      const next = {...prev,...f};
       const inv  = [...prev.invChart];
       const w    = new Date().toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit'});
       const il   = inv[inv.length-1];
       inv.push({
         w,
-        cmex: f.cmex_stocks  ?? il?.cmex  ?? 0,
-        lme:  f.lme_stocks   ?? il?.lme   ?? 0,
-        shfe: f.shfe_stocks  ?? il?.shfe  ?? 0,
-        canc: f.warrants_cancelled ?? il?.canc ?? 0,
+        cmex: f.cmex_stocks         ?? il?.cmex ?? 0,
+        lme:  f.lme_stocks          ?? il?.lme  ?? 0,
+        shfe: f.shfe_stocks         ?? il?.shfe ?? 0,
+        canc: f.warrants_cancelled  ?? il?.canc ?? 0,
       });
       if (inv.length>10) inv.shift();
-      return {...next, invChart:inv, syncVer:(prev.syncVer||0)+1};
+      return {...next,invChart:inv,syncVer:(prev.syncVer||0)+1};
     });
   }, []);
 
   const patchCOT = useCallback(f => {
     setS(prev => {
-      const next = {...prev, ...f};
+      const next = {...prev,...f};
       const cot  = [...prev.cotChart];
       if (f.mm_long !== undefined) {
         const w = new Date().toLocaleDateString('vi-VN',{day:'2-digit',month:'2-digit'});
-        cot.push({w, mm:f.mm_long, comm:f.comm_short??prev.comm_short??-73000});
+        cot.push({w,mm:f.mm_long,comm:f.comm_short??prev.comm_short??-73000});
         if (cot.length>10) cot.shift();
       }
-      return {...next, cotChart:cot, syncVer:(prev.syncVer||0)+1};
+      return {...next,cotChart:cot,syncVer:(prev.syncVer||0)+1};
     });
   }, []);
 
@@ -461,8 +460,8 @@ export default function Home() {
       if (d.comex) {
         patchPrice(d);
         setTsPrice(Date.now());
-        setNextPrice(Date.now() + RF.price);
-        setPriceSource(d.source || 'unknown');
+        setNextPrice(Date.now()+RF.price);
+        setPriceSource(d.source||'unknown');
         aLog(`✅ COMEX $${d.comex.toFixed(3)}/lb [${d.source}]`);
       } else aLog('⚠️ Không lấy được giá');
     } catch(e) { aLog(`❌ ${e.message}`); }
@@ -489,7 +488,7 @@ Return ONLY raw JSON: {"lme_stocks":<int>,"shfe_stocks":<int>,"cmex_stocks":<int
       if (p?.lme_stocks) {
         patchInv(p);
         setTsInv(Date.now());
-        setNextFund(Date.now() + RF.fund);
+        setNextFund(Date.now()+RF.fund);
         aLog(`✅ LME ${p.lme_stocks?.toLocaleString()} MT`);
       } else aLog('⚠️ Không parse được tồn kho');
     } catch(e) { aLog(`❌ ${e.message}`); }
@@ -506,7 +505,7 @@ Return ONLY raw JSON: {"lme_stocks":<int>,"shfe_stocks":<int>,"cmex_stocks":<int
         body: JSON.stringify({
           model:'claude-sonnet-4-5', max_tokens:500,
           messages:[{ role:'user', content:
-            `Search latest CFTC COT copper managed money long contracts, fear greed index, copper gold ratio, DXY.
+            `Search latest CFTC COT copper managed money long short, fear greed index, copper gold ratio, DXY.
 Return ONLY raw JSON: {"mm_long":<int>,"comm_short":<int>,"fear_greed":<int>,"cu_gold_ratio":<float>,"dxy":<float>,"dxy_chg":<float>}`
           }],
         }),
@@ -539,8 +538,8 @@ Return ONLY raw JSON array: [{"name":"<str>","impact":"<high|medium|low>","curre
       });
       const d = await r.json();
       const p = extractJ(getTxt(d));
-      if (Array.isArray(p) && p.length>0) {
-        setS(prev => ({...prev, calendarEvents:p, syncVer:(prev.syncVer||0)+1}));
+      if (Array.isArray(p)&&p.length>0) {
+        setS(prev => ({...prev,calendarEvents:p,syncVer:(prev.syncVer||0)+1}));
         setTsCal(Date.now());
         aLog(`✅ Lịch: ${p.length} sự kiện`);
       } else aLog('⚠️ Không parse được lịch');
@@ -555,10 +554,8 @@ Return ONLY raw JSON array: [{"name":"<str>","impact":"<high|medium|low>","curre
     try {
       const r = await fetch('/api/news');
       const d = await r.json();
-      if (d.news?.length) {
-        setNews(d.news);
-        aLog(`✅ Tin tức: ${d.news.length} bài`);
-      } else aLog('⚠️ Không có tin tức');
+      if (d.news?.length) { setNews(d.news); aLog(`✅ Tin tức: ${d.news.length} bài`); }
+      else aLog('⚠️ Không có tin tức');
     } catch(e) { aLog(`❌ ${e.message}`); }
     finally { setLoadNews(false); }
   }, [loadNews, aLog]);
@@ -580,9 +577,9 @@ Return ONLY raw JSON array: [{"region":"<str>","event":"<Vietnamese>","impact":<
       });
       const d = await r.json();
       const p = extractJ(getTxt(d));
-      if (Array.isArray(p) && p.length>0) {
-        setBSE(p.map(e => ({...e, col:e.impact>70?A.red:e.impact>50?A.orange:A.amber})));
-        setNextBS(Date.now() + RF.bs);
+      if (Array.isArray(p)&&p.length>0) {
+        setBSE(p.map(e => ({...e,col:e.impact>70?A.red:e.impact>50?A.orange:A.amber})));
+        setNextBS(Date.now()+RF.bs);
         aLog(`✅ BS: ${p.length} rủi ro`);
       } else aLog('⚠️ Không parse được BS');
     } catch(e) { aLog(`❌ ${e.message}`); }
@@ -600,10 +597,10 @@ Return ONLY raw JSON array: [{"region":"<str>","event":"<Vietnamese>","impact":<
     await fetchCalendar();
     await new Promise(r => setTimeout(r,1000));
     await fetchNews();
-  }, [fetchPrice, fetchInventory, fetchCOT, fetchCalendar, fetchNews]);
+  }, [fetchPrice,fetchInventory,fetchCOT,fetchCalendar,fetchNews]);
 
   // ─── AI Verdict ────────────────────────────────────────────
-  const doVerdict = useCallback(async (verdict, ti, mh, bias) => {
+  const doVerdict = useCallback(async (verdict,ti,mh,bias) => {
     if (loadVerdict) return;
     setLoadVerdict(true); aLog('🧠 AI Verdict...');
     try {
@@ -623,81 +620,75 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
       if (text) { setVT(text); aLog('✅ AI Verdict hoàn tất'); }
     } catch(e) { aLog(`❌ ${e.message}`); }
     finally { setLoadVerdict(false); }
-  }, [loadVerdict, aLog, s.comex]);
+  }, [loadVerdict,aLog,s.comex]);
 
   // ─── Auto-refresh timer ────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => {
       const now = Date.now();
-      if (nextPrice && now>=nextPrice && !loadPrice) {
-        aLog('⏰ Auto-refresh giá...');
-        fetchPrice();
-      }
-      if (nextFund && now>=nextFund && !loadInv && !loadCOT && !loadCal) {
+      if (nextPrice&&now>=nextPrice&&!loadPrice) { aLog('⏰ Auto-refresh giá...'); fetchPrice(); }
+      if (nextFund&&now>=nextFund&&!loadInv&&!loadCOT&&!loadCal) {
         aLog('⏰ Auto-refresh cơ bản...');
         fetchInventory();
-        setTimeout(() => fetchCOT(),      1200);
-        setTimeout(() => fetchCalendar(), 2400);
-        setNextFund(now + RF.fund);
+        setTimeout(()=>fetchCOT(),1200);
+        setTimeout(()=>fetchCalendar(),2400);
+        setNextFund(now+RF.fund);
       }
-      if (nextBS && now>=nextBS && !loadBS) {
-        aLog('⏰ Auto-refresh Black Swan...');
-        fetchBS();
-      }
+      if (nextBS&&now>=nextBS&&!loadBS) { aLog('⏰ Auto-refresh Black Swan...'); fetchBS(); }
     }, 30000);
     return () => clearInterval(id);
-  }, [nextPrice, nextFund, nextBS, loadPrice, loadInv, loadCOT, loadCal, loadBS,
-      fetchPrice, fetchInventory, fetchCOT, fetchCalendar, fetchBS, aLog]);
+  }, [nextPrice,nextFund,nextBS,loadPrice,loadInv,loadCOT,loadCal,loadBS,
+      fetchPrice,fetchInventory,fetchCOT,fetchCalendar,fetchBS,aLog]);
 
   // ─── Init on mount ─────────────────────────────────────────
   useEffect(() => {
     const now = Date.now();
-    setNextPrice(now + RF.price);
-    setNextFund(now  + RF.fund);
-    setNextBS(now    + RF.bs);
+    setNextPrice(now+RF.price);
+    setNextFund(now+RF.fund);
+    setNextBS(now+RF.bs);
     fetchPrice();
-    setTimeout(() => fetchInventory(), 2000);
-    setTimeout(() => fetchCOT(),       4000);
-    setTimeout(() => fetchCalendar(),  6000);
-    setTimeout(() => fetchBS(),        8000);
+    setTimeout(()=>fetchInventory(),2000);
+    setTimeout(()=>fetchCOT(),4000);
+    setTimeout(()=>fetchCalendar(),6000);
+    setTimeout(()=>fetchBS(),8000);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  },[]);
 
-  // ─── Core calculations ─────────────────────────────────────
-  const curveInfo    = useMemo(() => analyzeCurve(futures),       [futures]);
-  const stress       = useMemo(() => runStress(bsEvents, s.bias_raw||63), [bsEvents, s.bias_raw]);
-  const vsa          = useMemo(() => calcVSA(s.priceChart),       [s.priceChart]);
-  const ew           = useMemo(() => calcElliott(s.priceChart, s.comex||6.07), [s.priceChart, s.comex]);
-  const ti           = useMemo(() => calcTI(s.priceChart, s.comex||6.07, s.rsi_h4||68, vsa, ew), [s.priceChart, s.comex, s.rsi_h4, vsa, ew]);
-  const mh           = useMemo(() => calcMH(s.invChart, s.cotChart, s.cmex_stocks, s.prev_cmex_stocks, s.lme_stocks, s.prev_lme_stocks, s.shfe_stocks, s.prev_shfe_stocks, s.mm_long), [s]);
-  const pricePattern = useMemo(() => calcPricePattern(s.priceChart), [s.priceChart]);
-  const pci          = useMemo(() => calcPCI(s.mm_long, s.comm_short), [s.mm_long, s.comm_short]);
-  const cgI          = useMemo(() => interpCG(s.cu_gold_ratio||0.059), [s.cu_gold_ratio]);
-  const handoff      = useMemo(() => calcHandoff(s.comex_chg_pct, s.session_vol, s.avg_vol), [s.comex_chg_pct, s.session_vol, s.avg_vol]);
-  const regime       = useMemo(() => detectRegime(s.dxy_chg, s.fear_greed, s.cu_gold_ratio), [s.dxy_chg, s.fear_greed, s.cu_gold_ratio]);
-  const weights      = useMemo(() => getWeights(regime), [regime]);
+  // ─── Calculations ──────────────────────────────────────────
+  const curveInfo    = useMemo(()=>analyzeCurve(futures),[futures]);
+  const stress       = useMemo(()=>runStress(bsEvents,s.bias_raw||63),[bsEvents,s.bias_raw]);
+  const vsa          = useMemo(()=>calcVSA(s.priceChart),[s.priceChart]);
+  const ew           = useMemo(()=>calcElliott(s.priceChart,s.comex||6.07),[s.priceChart,s.comex]);
+  const ti           = useMemo(()=>calcTI(s.priceChart,s.comex||6.07,s.rsi_h4||68,vsa,ew),[s.priceChart,s.comex,s.rsi_h4,vsa,ew]);
+  const mh           = useMemo(()=>calcMH(s.invChart,s.cotChart,s.cmex_stocks,s.prev_cmex_stocks,s.lme_stocks,s.prev_lme_stocks,s.shfe_stocks,s.prev_shfe_stocks,s.mm_long),[s]);
+  const pricePattern = useMemo(()=>calcPricePattern(s.priceChart),[s.priceChart]);
+  const pci          = useMemo(()=>calcPCI(s.mm_long,s.comm_short),[s.mm_long,s.comm_short]);
+  const cgI          = useMemo(()=>interpCG(s.cu_gold_ratio||0.059),[s.cu_gold_ratio]);
+  const handoff      = useMemo(()=>calcHandoff(s.comex_chg_pct,s.session_vol,s.avg_vol),[s.comex_chg_pct,s.session_vol,s.avg_vol]);
+  const regime       = useMemo(()=>detectRegime(s.dxy_chg,s.fear_greed,s.cu_gold_ratio),[s.dxy_chg,s.fear_greed,s.cu_gold_ratio]);
+  const weights      = useMemo(()=>getWeights(regime),[regime]);
 
-  // ─── Radar hook (replaces inline radarData) ────────────────
+  // ─── Radar hook ────────────────────────────────────────────
   const { radarData, wRaw } = useRadarData(s, weights);
 
-  const pciA  = pci>65?3:pci>45?0:-5;
-  const bias  = useMemo(() => Math.max(0,Math.min(100,
-    wRaw + pciA + cgI.adj + handoff.score + curveInfo.biasAdj
-    - Math.round((stress.bsRisk||0)*0.15)
-    - ((s.fear_greed||58)>80?10:0)
-  )), [wRaw, pciA, cgI.adj, handoff.score, curveInfo.biasAdj, stress.bsRisk, s.fear_greed]);
+  const pciA    = pci>65?3:pci>45?0:-5;
+  const bias    = useMemo(()=>Math.max(0,Math.min(100,
+    wRaw+pciA+cgI.adj+handoff.score+curveInfo.biasAdj
+    -Math.round((stress.bsRisk||0)*0.15)
+    -((s.fear_greed||58)>80?10:0)
+  )),[wRaw,pciA,cgI.adj,handoff.score,curveInfo.biasAdj,stress.bsRisk,s.fear_greed]);
 
-  const verdict      = useMemo(() => calcVerdict(ti.pk1Score, mh.pk2Score, bias, stress), [ti, mh, bias, stress]);
-  const liq          = useMemo(() => calcLiq(s.comex||6.07, s.prev_high||6.12, s.prev_low||5.89, s.session_vol||91000, s.avg_vol||105000), [s.comex, s.prev_high, s.prev_low, s.session_vol, s.avg_vol]);
-  const ez           = useMemo(() => calcEZ(s.comex||6.07, s.sl||5.72, s.tp1||6.32, s.tp2||6.58, s.prev_high||6.12, s.prev_low||5.89, s.atr||0.12), [s.comex, s.sl, s.tp1, s.tp2, s.prev_high, s.prev_low, s.atr]);
-  const sc           = useMemo(() => calcSC(ew, vsa, stress, bias, s.comex||6.07, s.tp1||6.32, s.tp2||6.58, s.sl||5.72), [ew, vsa, stress, bias, s.comex, s.tp1, s.tp2, s.sl]);
-  const plan         = useMemo(() => buildPlan(s, ew, vsa, ti, mh, verdict, bias, stress, liq, ez, sc), [s, ew, vsa, ti, mh, verdict, bias, stress, liq, ez, sc]);
+  const verdict  = useMemo(()=>calcVerdict(ti.pk1Score,mh.pk2Score,bias,stress),[ti,mh,bias,stress]);
+  const liq      = useMemo(()=>calcLiq(s.comex||6.07,s.prev_high||6.12,s.prev_low||5.89,s.session_vol||91000,s.avg_vol||105000),[s.comex,s.prev_high,s.prev_low,s.session_vol,s.avg_vol]);
+  const ez       = useMemo(()=>calcEZ(s.comex||6.07,s.sl||5.72,s.tp1||6.32,s.tp2||6.58,s.prev_high||6.12,s.prev_low||5.89,s.atr||0.12),[s.comex,s.sl,s.tp1,s.tp2,s.prev_high,s.prev_low,s.atr]);
+  const sc       = useMemo(()=>calcSC(ew,vsa,stress,bias,s.comex||6.07,s.tp1||6.32,s.tp2||6.58,s.sl||5.72),[ew,vsa,stress,bias,s.comex,s.tp1,s.tp2,s.sl]);
+  const plan     = useMemo(()=>buildPlan(s,ew,vsa,ti,mh,verdict,bias,stress,liq,ez,sc),[s,ew,vsa,ti,mh,verdict,bias,stress,liq,ez,sc]);
 
-  const sigCol  = bias>=70 ? A.green : bias>=55 ? A.amber : A.red;
-  const sigLabel = bias>=70 ? '🚀 LONG SETUP' : bias>=55 ? '⏳ TRUNG LẬP' : '🛑 KHÔNG GIAO DỊCH';
-  const comexUp = (s.comex_chg_pct||0) >= 0;
-  const rLabel  = regime==='risk_off' ? '⚠️ RISK-OFF' : regime==='stagflation' ? '🌡️ STAGFLATION' : '✅ RISK-ON';
-  const rCol    = regime==='risk_off' ? A.red : regime==='stagflation' ? A.orange : A.green;
+  const sigCol   = bias>=70?A.green:bias>=55?A.amber:A.red;
+  const sigLabel = bias>=70?'🚀 LONG SETUP':bias>=55?'⏳ TRUNG LẬP':'🛑 KHÔNG GIAO DỊCH';
+  const comexUp  = (s.comex_chg_pct||0) >= 0;
+  const rLabel   = regime==='risk_off'?'⚠️ RISK-OFF':regime==='stagflation'?'🌡️ STAGFLATION':'✅ RISK-ON';
+  const rCol     = regime==='risk_off'?A.red:regime==='stagflation'?A.orange:A.green;
 
   // ─── RENDER ────────────────────────────────────────────────
   return (
@@ -733,7 +724,8 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
         gap:8, marginBottom:12 }}>
         <div style={{ background:'var(--card2)', border:'1px solid var(--border)',
           borderRadius:8, padding:'8px 10px' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:2 }}>
+          <div style={{ display:'flex', alignItems:'center',
+            justifyContent:'space-between', marginBottom:2 }}>
             <span style={{ fontSize:8, color:'var(--muted)' }}>COMEX</span>
             <SourceBadge source={priceSource} />
           </div>
@@ -770,18 +762,13 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
       {tab===0 && (
         <div style={{ display:'grid', gap:10 }}>
 
-          {/* ── Radar Chart (MỚI) ── */}
+          {/* Radar */}
           <RadarChart
-            radarData={radarData}
-            weights={weights}
-            verdict={verdict}
-            bias={bias}
-            sigCol={sigCol}
-            sigLabel={sigLabel}
-            rLabel={rLabel}
+            radarData={radarData} weights={weights}
+            verdict={verdict} bias={bias}
+            sigCol={sigCol} sigLabel={sigLabel} rLabel={rLabel}
           />
 
-          {/* ── Verdict + Fear&Greed ── */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:10 }}>
 
             <Card glow={verdict.verdictCol}>
@@ -801,15 +788,13 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
               <ScoreBar label="PK2 — Nền tảng"  score={mh.pk2Score} col={mh.pk2Col} />
               <ScoreBar label="Bias tổng hợp"   score={bias}        col={sigCol}    />
               <div style={{ marginTop:8 }}>
-                <FetchBtn onClick={() => doVerdict(verdict,ti,mh,bias)}
+                <FetchBtn onClick={()=>doVerdict(verdict,ti,mh,bias)}
                   loading={loadVerdict} label="🧠 AI Phân tích" icon="🧠" col={A.purple} />
               </div>
               {verdictText && (
                 <div style={{ marginTop:8, background:A.purple+'08', borderRadius:8,
                   padding:'10px', fontSize:10, color:'var(--text)',
-                  lineHeight:1.8, whiteSpace:'pre-line' }}>
-                  {verdictText}
-                </div>
+                  lineHeight:1.8, whiteSpace:'pre-line' }}>{verdictText}</div>
               )}
             </Card>
 
@@ -830,11 +815,11 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
             </Card>
           </div>
 
-          {/* ── Price chart ── */}
           <Card glow={comexUp?A.green:A.red}>
             <div style={{ display:'flex', justifyContent:'space-between',
               alignItems:'center', marginBottom:8 }}>
-              <div style={{ fontSize:11, fontWeight:700, display:'flex', alignItems:'center', gap:6 }}>
+              <div style={{ fontSize:11, fontWeight:700, display:'flex',
+                alignItems:'center', gap:6 }}>
                 📈 COMEX PRICE CHART <SourceBadge source={priceSource} />
               </div>
               <div style={{ display:'flex', gap:6, alignItems:'center' }}>
@@ -859,7 +844,6 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
             </ResponsiveContainer>
           </Card>
 
-          {/* ── Calendar ── */}
           <Card glow={A.amber}>
             <div style={{ display:'flex', justifyContent:'space-between',
               alignItems:'center', marginBottom:8 }}>
@@ -873,7 +857,6 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
             <EconCalendar events={s.calendarEvents||[]} />
           </Card>
 
-          {/* ── Log ── */}
           <Card>
             <div style={{ fontSize:11, fontWeight:700, marginBottom:6 }}>📋 ACTIVITY LOG</div>
             {log.slice(0,8).map((l,i) => (
@@ -892,7 +875,8 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
       {/* ══ TAB 1: Xu hướng ══════════════════════════════════ */}
       {tab===1 && (
         <div style={{ display:'grid', gap:10 }}>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:10 }}>
+          <div style={{ display:'grid',
+            gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:10 }}>
 
             <Card glow={ew.failure?A.red:A.blue}>
               <div style={{ fontSize:11, fontWeight:700, marginBottom:8 }}>🌊 ELLIOTT WAVE + FIB</div>
@@ -903,12 +887,13 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
                 <div style={{ fontSize:10, color:'var(--muted)', marginTop:3 }}>{ew.scenario}</div>
               </div>
               {[
-                {lbl:'Fib 0.382', val:ew.fib382, col:A.teal},
-                {lbl:'Fib 0.500', val:ew.fib500, col:A.blue},
-                {lbl:'Fib 0.618', val:ew.fib618, col:A.amber},
-                {lbl:'Fib 0.786', val:ew.fib786, col:A.red},
+                {lbl:'Fib 0.382',val:ew.fib382,col:A.teal},
+                {lbl:'Fib 0.500',val:ew.fib500,col:A.blue},
+                {lbl:'Fib 0.618',val:ew.fib618,col:A.amber},
+                {lbl:'Fib 0.786',val:ew.fib786,col:A.red},
               ].map((f,i) => (
-                <div key={i} style={{ display:'flex', alignItems:'center', gap:7, padding:'5px 8px',
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:7,
+                  padding:'5px 8px',
                   background:Math.abs((s.comex||6.07)-f.val)<0.05?f.col+'18':'var(--card2)',
                   border:`1px solid ${Math.abs((s.comex||6.07)-f.val)<0.05?f.col:'var(--border)'}`,
                   borderRadius:6, marginBottom:4 }}>
@@ -931,13 +916,14 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
               </div>
               {vsa.bars.slice(-5).reverse().map((b,i) => {
                 const VC = {
-                  ABSORPTION_BULL:A.green, ABSORPTION_BEAR:A.red, STOPPING_VOLUME:A.amber,
-                  UPTHRUST:A.red, SPRING:A.green, NO_DEMAND:A.orange,
-                  NO_SUPPLY:A.teal, NEUTRAL:'var(--muted)',
+                  ABSORPTION_BULL:A.green,ABSORPTION_BEAR:A.red,STOPPING_VOLUME:A.amber,
+                  UPTHRUST:A.red,SPRING:A.green,NO_DEMAND:A.orange,
+                  NO_SUPPLY:A.teal,NEUTRAL:'var(--muted)',
                 };
                 const col = VC[b.vsa]||'var(--muted)';
                 return (
-                  <div key={i} style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 7px',
+                  <div key={i} style={{ display:'flex', alignItems:'center', gap:6,
+                    padding:'4px 7px',
                     background:i===0?col+'12':'var(--card2)',
                     border:`1px solid ${i===0?col:'var(--border)'}`,
                     borderRadius:5, marginBottom:3 }}>
@@ -958,8 +944,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
               <span style={{ color:pricePattern.meta.col }}>{pricePattern.meta.name}</span>
             </div>
             <div style={{ background:pricePattern.meta.col+'12',
-              border:`1px solid ${pricePattern.meta.col}44`,
-              borderRadius:10, padding:'10px' }}>
+              border:`1px solid ${pricePattern.meta.col}44`, borderRadius:10, padding:'10px' }}>
               <div style={{ fontSize:12, fontWeight:800,
                 color:pricePattern.meta.col, marginBottom:5 }}>{pricePattern.meta.name}</div>
               <div style={{ fontSize:10, color:'var(--text)', lineHeight:1.7, marginBottom:7 }}>
@@ -982,105 +967,16 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
         </div>
       )}
 
-      {/* ══ TAB 2: Nền tảng ══════════════════════════════════ */}
+      {/* ══ TAB 2: Nền tảng & Dòng tiền (FundamentalsTab) ═══ */}
       {tab===2 && (
-        <div style={{ display:'grid', gap:10 }}>
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:10 }}>
-
-            <Card glow={mh.cotBullish?A.green:A.amber}>
-              <div style={{ display:'flex', justifyContent:'space-between',
-                alignItems:'center', marginBottom:8 }}>
-                <div style={{ fontSize:11, fontWeight:700 }}>🦈 COT SMART MONEY</div>
-                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  <TsBadge ts={tsCOT} />
-                  <FetchBtn onClick={fetchCOT} loading={loadCOT}
-                    label="Cập nhật" icon="🔄" col={A.green} small />
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={140}>
-                <AreaChart data={s.cotChart}>
-                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                  <XAxis dataKey="w" tick={{fill:'var(--muted)',fontSize:8}} />
-                  <YAxis tick={{fill:'var(--muted)',fontSize:8}}
-                    tickFormatter={v=>`${(v/1000).toFixed(0)}k`} />
-                  <Tooltip content={<TT/>} />
-                  <Area type="monotone" dataKey="mm"   name="MM Long"
-                    stroke={A.green} fill={A.green} fillOpacity={0.2} />
-                  <Area type="monotone" dataKey="comm" name="Commercials"
-                    stroke={A.red}   fill={A.red}   fillOpacity={0.15} />
-                </AreaChart>
-              </ResponsiveContainer>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:5, marginTop:6 }}>
-                {[
-                  {lbl:'MM Long',   val:`+${(s.mm_long||64000).toLocaleString()}`, col:A.green},
-                  {lbl:'PCI',       val:`${pci}%`, col:pci>65?A.green:pci>45?A.amber:A.red},
-                  {lbl:'PK2 Score', val:`${mh.pk2Score}/100`, col:mh.pk2Col},
-                ].map((m,i) => (
-                  <div key={i} style={{ background:'var(--card2)', borderRadius:6,
-                    padding:'5px 7px', textAlign:'center' }}>
-                    <div style={{ fontSize:8, color:'var(--muted)' }}>{m.lbl}</div>
-                    <div style={{ fontSize:11, fontWeight:800, color:m.col }}>{m.val}</div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-
-            <Card glow={mh.invTrend==='DECREASING'?A.teal:'var(--border)'}>
-              <div style={{ display:'flex', justifyContent:'space-between',
-                alignItems:'center', marginBottom:8 }}>
-                <div style={{ fontSize:11, fontWeight:700 }}>📦 TỒN KHO 3 SÀN</div>
-                <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                  <TsBadge ts={tsInv} />
-                  <FetchBtn onClick={fetchInventory} loading={loadInv}
-                    label="Cập nhật" icon="🔄" col={A.teal} small />
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={140}>
-                <ComposedChart data={s.invChart}>
-                  <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                  <XAxis dataKey="w" tick={{fill:'var(--muted)',fontSize:8}} />
-                  <YAxis yAxisId="i" tick={{fill:'var(--muted)',fontSize:8}}
-                    tickFormatter={v=>`${(v/1000).toFixed(0)}k`} />
-                  <YAxis yAxisId="c" orientation="right"
-                    tick={{fill:'var(--muted)',fontSize:8}} />
-                  <Tooltip content={<TT/>} />
-                  <Bar  yAxisId="i" dataKey="lme"  name="LME"   fill={A.blue}   opacity={0.6} stackId="s" />
-                  <Bar  yAxisId="i" dataKey="shfe" name="SHFE"  fill={A.purple} opacity={0.6} stackId="s" />
-                  <Bar  yAxisId="i" dataKey="cmex" name="COMEX" fill={A.cyan}   opacity={0.8} stackId="s" />
-                  <Line yAxisId="c" type="monotone" dataKey="canc" name="Warrant"
-                    stroke={A.orange} strokeWidth={2} dot={{r:3}} />
-                </ComposedChart>
-              </ResponsiveContainer>
-            </Card>
-          </div>
-
-          <Card glow={stress.sevCol}>
-            <div style={{ display:'flex', justifyContent:'space-between',
-              alignItems:'center', marginBottom:8 }}>
-              <div style={{ fontSize:11, fontWeight:700 }}>🦢 BLACK SWAN RADAR</div>
-              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                <Chip label={stress.sevLabel} color={stress.sevCol} size={9} />
-                <FetchBtn onClick={fetchBS} loading={loadBS}
-                  label="Cập nhật" icon="🔄" col={A.red} small />
-              </div>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:8 }}>
-              {bsEvents.slice(0,4).map((e,i) => (
-                <div key={i} style={{ background:'var(--card2)',
-                  border:`1px solid ${e.col}35`, borderRadius:8, padding:'8px 10px' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:4 }}>
-                    <span style={{ fontSize:10, fontWeight:700, color:e.col }}>📍 {e.region}</span>
-                    <Chip label={`${e.impact}/100`} color={e.col} size={8} />
-                  </div>
-                  <div style={{ fontSize:9, color:'var(--text)', marginBottom:5 }}>{e.event}</div>
-                  <div style={{ background:'var(--border)', borderRadius:3, height:3, overflow:'hidden' }}>
-                    <div style={{ width:`${e.impact}%`, height:'100%', background:e.col }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
+        <FundamentalsTab
+          s={s}
+          mh={mh}
+          pci={pci}
+          fetchInventory={fetchInventory}
+          loadInv={loadInv}
+          tsInv={tsInv}
+        />
       )}
 
       {/* ══ TAB 3: Verdict ═══════════════════════════════════ */}
@@ -1088,12 +984,13 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
         <div style={{ display:'grid', gap:10 }}>
           <Card glow={verdict.verdictCol}>
             <div style={{ fontSize:12, fontWeight:800, marginBottom:12 }}>🏁 THE FINAL VERDICT</div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',
+            <div style={{ display:'grid',
+              gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',
               gap:8, marginBottom:12 }}>
               {[
-                {icon:'🏗️', lbl:'PK1',  score:ti.pk1Score, col:ti.pk1Col,       thr:65},
-                {icon:'🏗️', lbl:'PK2',  score:mh.pk2Score, col:mh.pk2Col,       thr:60},
-                {icon:'⚖️', lbl:'Bias', score:bias,         col:sigCol,           thr:60},
+                {icon:'🏗️',lbl:'PK1',score:ti.pk1Score,col:ti.pk1Col,thr:65},
+                {icon:'🏗️',lbl:'PK2',score:mh.pk2Score,col:mh.pk2Col,thr:60},
+                {icon:'⚖️',lbl:'Bias',score:bias,col:sigCol,thr:60},
               ].map((m,i) => (
                 <div key={i} style={{
                   background:m.score>=m.thr?m.col+'14':'var(--card2)',
@@ -1123,7 +1020,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
               </div>
               <div style={{ fontSize:10, color:'var(--muted)' }}>{verdict.verdictDesc}</div>
             </div>
-            <FetchBtn onClick={() => doVerdict(verdict,ti,mh,bias)}
+            <FetchBtn onClick={()=>doVerdict(verdict,ti,mh,bias)}
               loading={loadVerdict} label="🧠 AI Phân tích chuyên sâu" icon="🧠" col={A.purple} />
             {verdictText && (
               <div style={{ marginTop:10, background:A.purple+'08', borderRadius:8,
@@ -1138,7 +1035,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
       {tab===4 && (
         <div style={{ display:'grid', gap:10 }}>
 
-          {/* Liquidity */}
+          {/* Liquidity status */}
           <div style={{ background:liq.col+'18', border:`1.5px solid ${liq.col}`,
             borderRadius:10, padding:'10px 13px',
             display:'flex', alignItems:'center', gap:10 }}>
@@ -1167,7 +1064,8 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
             <div style={{ fontSize:12, fontWeight:800, color:'var(--text)', marginBottom:8 }}>
               📖 TRADE PLAYBOOK
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))', gap:8 }}>
+            <div style={{ display:'grid',
+              gridTemplateColumns:'repeat(auto-fit,minmax(260px,1fr))', gap:8 }}>
               {plan.scenarios.map((sc2,i) => (
                 <div key={i} style={{
                   background:sc2.active&&sc2.type!=='avoid'?sc2.col+'10':'var(--card)',
@@ -1200,14 +1098,16 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
                     <div style={{ fontSize:9, fontWeight:700, color:sc2.col, marginBottom:2 }}>
                       📌 LUẬN ĐIỂM
                     </div>
-                    <div style={{ fontSize:10, color:'var(--text)', lineHeight:1.6 }}>{sc2.thesis}</div>
+                    <div style={{ fontSize:10, color:'var(--text)', lineHeight:1.6 }}>
+                      {sc2.thesis}
+                    </div>
                   </div>
 
                   {sc2.type!=='avoid' && (
                     <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)',
                       gap:4, marginBottom:7 }}>
                       {[
-                        {lbl:'📍 Entry', val:`${sc2.entry.low}–${sc2.entry.high}`, col:sc2.col},
+                        {lbl:'📍 Entry',val:`${sc2.entry.low}–${sc2.entry.high}`,col:sc2.col},
                         {lbl:'🛑 SL',   val:`${sc2.sl}`,  col:A.red},
                         {lbl:'🎯 TP1',  val:`${sc2.tp1}`, col:A.green},
                         {lbl:'🎯 TP2',  val:`${sc2.tp2}`, col:A.teal},
@@ -1258,7 +1158,8 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
                 <thead>
                   <tr>
                     {['Mức','$/lb','Type','Δ%','Hành động'].map((h,i) => (
-                      <th key={i} style={{ color:'var(--muted)', textAlign:i<2?'left':'center',
+                      <th key={i} style={{ color:'var(--muted)',
+                        textAlign:i<2?'left':'center',
                         padding:'3px 7px', fontWeight:400, fontSize:8,
                         borderBottom:'1px solid var(--border)' }}>{h}</th>
                     ))}
@@ -1310,14 +1211,15 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
             <div style={{ fontSize:11, fontWeight:700, marginBottom:8 }}>
               ⚗️ STRESS-TEST · HỘI TỤ {sc.conv.prob}% | PHÂN KỲ {sc.div.prob}% | GÃY {sc.brk.prob}%
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(255px,1fr))', gap:8 }}>
+            <div style={{ display:'grid',
+              gridTemplateColumns:'repeat(auto-fit,minmax(255px,1fr))', gap:8 }}>
               {[
-                {ss:sc.conv, entry:`$${ez.z1.low}–$${ez.z1.high}`,
-                  mgmt:'50%→thêm 50% Vol xác nhận', tp1:`$${s.tp1||6.32}`, tp2:`$${sc.conv.tp}`},
-                {ss:sc.div,  entry:'KHÔNG vào lệnh', mgmt:'Theo dõi Vol', tp1:'–', tp2:'–'},
-                {ss:sc.brk,  entry:'THOÁT toàn bộ',
+                {ss:sc.conv,entry:`$${ez.z1.low}–$${ez.z1.high}`,
+                  mgmt:'50%→thêm 50% Vol xác nhận',tp1:`$${s.tp1||6.32}`,tp2:`$${sc.conv.tp}`},
+                {ss:sc.div, entry:'KHÔNG vào lệnh',mgmt:'Theo dõi Vol',tp1:'–',tp2:'–'},
+                {ss:sc.brk, entry:'THOÁT toàn bộ',
                   mgmt:`H4 dưới $${ew.fib786?.toFixed(3)||'–'} → exit`,
-                  tp1:'–', tp2:`$${sc.brk.target}`},
+                  tp1:'–',tp2:`$${sc.brk.target}`},
               ].map(({ss,entry,mgmt,tp1,tp2},i) => (
                 <div key={i} style={{ background:ss.col+'12',
                   border:`1.5px solid ${ss.col}55`, borderRadius:10, padding:'11px' }}>
