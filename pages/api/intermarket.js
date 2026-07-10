@@ -1,62 +1,60 @@
-// ─── Data flow: Yahoo Finance batch → cache 5m → JSON giá thật ───────────────
+// ─── Data flow: Yahoo Finance batch → 9 assets → cache 5m → JSON ─────────────
 
-let cache = { data: null, ts: 0 };
+let cache = { data:null, ts:0 };
 const CACHE_MS = 5 * 60 * 1000;
 
-// ─── Symbol map → Yahoo Finance tickers ──────────────────────────────────────
+// ─── 9 symbols (thêm CN50 + SHFE) ────────────────────────────────────────────
 const SYMBOLS = {
-  DXY:  'DX-Y.NYB',
-  SPX:  '^GSPC',
-  XAU:  'GC=F',
-  XAG:  'SI=F',
-  PLAT: 'PL=F',
-  OIL:  'CL=F',
-  VIX:  '^VIX',
+  DXY:  { ticker:'DX-Y.NYB',  name:'DXY (USD Index)',     region:'US',  corrDefault:-0.75 },
+  SPX:  { ticker:'^GSPC',     name:'S&P 500',             region:'US',  corrDefault:+0.62 },
+  XAU:  { ticker:'GC=F',      name:'Vàng XAU',            region:'US',  corrDefault:+0.45 },
+  XAG:  { ticker:'SI=F',      name:'Bạc XAG',             region:'US',  corrDefault:+0.78 },
+  PLAT: { ticker:'PL=F',      name:'Bạch Kim PLAT',       region:'US',  corrDefault:+0.55 },
+  OIL:  { ticker:'CL=F',      name:'Dầu WTI',             region:'US',  corrDefault:+0.40 },
+  VIX:  { ticker:'^VIX',      name:'VIX (Fear Index)',     region:'US',  corrDefault:-0.55 },
+  CN50: { ticker:'000001.SS', name:'Shanghai Composite',  region:'CN',  corrDefault:+0.71 },
+  SHFE: { ticker:null,        name:'SHFE Copper (TQ)',     region:'CN',  corrDefault:+0.95 },
 };
 
-// ─── Fetch 1 symbol từ Yahoo Finance ─────────────────────────────────────────
-async function fetchYahoo(symbol, yahooTicker) {
+// ─── Fetch Yahoo Finance single symbol ───────────────────────────────────────
+async function fetchYahoo(sym, cfg) {
+  if (!cfg.ticker) return { sym, price:null, chg:0, history:[], ok:false, err:'no_ticker' };
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooTicker}`
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${cfg.ticker}`
       + `?interval=1d&range=30d`;
     const r = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal: AbortSignal.timeout(6000),
+      headers:{ 'User-Agent':'Mozilla/5.0' },
+      signal: AbortSignal.timeout(7000),
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d    = await r.json();
-    const meta = d?.chart?.result?.[0]?.meta;
-    if (!meta) throw new Error('No meta');
+    const res  = d?.chart?.result?.[0];
+    if (!res)  throw new Error('no result');
 
-    const closes = d?.chart?.result?.[0]?.indicators?.quote?.[0]?.closes
-      || d?.chart?.result?.[0]?.indicators?.quote?.[0]?.close
-      || [];
-    const prevClose = meta.chartPreviousClose || meta.previousClose || meta.regularMarketPrice;
+    const meta      = res.meta;
     const price     = meta.regularMarketPrice;
-    const chg       = prevClose > 0
-      ? +((price - prevClose) / prevClose * 100).toFixed(2)
-      : 0;
+    const prevClose = meta.chartPreviousClose || meta.previousClose || price;
+    const chg       = prevClose>0 ? +((price-prevClose)/prevClose*100).toFixed(2) : 0;
+    const closes    = res.indicators?.quote?.[0]?.close?.filter(v=>v!=null) || [];
 
-    // Rolling 20-day closes cho correlation
-    const history = closes.filter(v => v != null).slice(-20);
-
-    return { symbol, price: +price.toFixed(3), chg, history, ok: true };
+    return { sym, price:+price.toFixed(3), chg, history:closes.slice(-20), ok:true };
   } catch(e) {
-    return { symbol, price: null, chg: 0, history: [], ok: false, err: e.message };
+    return { sym, price:null, chg:0, history:[], ok:false, err:e.message };
   }
 }
 
-// ─── Claude fallback cho symbols Yahoo fail ───────────────────────────────────
-async function fetchViaClaude(symbols, baseUrl) {
+// ─── Claude fallback ─────────────────────────────────────────────────────────
+async function fetchViaClaude(items, baseUrl) {
+  if (!items.length) return {};
   try {
     const r = await fetch(`${baseUrl}/api/claude`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5', max_tokens: 500,
-        messages: [{ role: 'user', content:
-          `Search current prices: ${symbols.join(', ')}.
-           Return ONLY raw JSON: {${symbols.map(s=>`"${s}":<float>`).join(',')}}` }],
+        model:'claude-sonnet-4-5', max_tokens:600,
+        messages:[{ role:'user', content:
+          `Search current prices for: ${items.map(i=>`${i.sym} (${i.cfg.name})`).join(', ')}.
+           For SHFE Copper search "SHFE copper price CNY per MT" from shfe.com.cn or Reuters.
+           Return ONLY raw JSON: {${items.map(i=>`"${i.sym}":{"price":<float>,"chg":<float>}`).join(',')}}` }],
       }),
     });
     const d    = await r.json();
@@ -66,95 +64,93 @@ async function fetchViaClaude(symbols, baseUrl) {
   } catch { return {}; }
 }
 
-// ─── Pearson correlation ──────────────────────────────────────────────────────
+// ─── Pearson rolling correlation ─────────────────────────────────────────────
 function pearson(xs, ys) {
   const n = Math.min(xs.length, ys.length);
   if (n < 5) return 0;
   const ax = xs.slice(-n).reduce((a,v)=>a+v,0)/n;
   const ay = ys.slice(-n).reduce((a,v)=>a+v,0)/n;
   let num=0, dx=0, dy=0;
-  for (let i=0; i<n; i++) {
-    const ex = xs[xs.length-n+i]-ax;
-    const ey = ys[ys.length-n+i]-ay;
-    num += ex*ey; dx += ex*ex; dy += ey*ey;
+  for (let i=0;i<n;i++) {
+    const ex=xs[xs.length-n+i]-ax, ey=ys[ys.length-n+i]-ay;
+    num+=ex*ey; dx+=ex*ex; dy+=ey*ey;
   }
-  const denom = Math.sqrt(dx*dy);
+  const denom=Math.sqrt(dx*dy);
   return denom>0 ? +(num/denom).toFixed(2) : 0;
+}
+
+// ─── Signal logic ─────────────────────────────────────────────────────────────
+function getSignal(corr, chg) {
+  const aligned = (corr>0&&chg>0)||(corr<0&&chg<0);
+  const abs     = Math.abs(corr);
+  if (abs>=0.70&&aligned)  return { sig:'HỖ TRỢ MẠNH',  col:'#22c55e' };
+  if (abs>=0.50&&aligned)  return { sig:'HỖ TRỢ TĂNG',  col:'#22c55e' };
+  if (abs>=0.70&&!aligned) return { sig:'CẢN TRỞ MẠNH', col:'#ef4444' };
+  if (abs>=0.50&&!aligned) return { sig:'CẢN TRỞ NHẸ',  col:'#f59e0b' };
+  return { sig:'TRUNG TÍNH', col:'#f59e0b' };
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== 'GET')
-    return res.status(405).json({ error: 'Method not allowed' });
+    return res.status(405).json({ error:'Method not allowed' });
 
   const force = req.query.force === '1';
   if (!force && cache.data && Date.now()-cache.ts < CACHE_MS)
-    return res.status(200).json({ ...cache.data, cached: true });
+    return res.status(200).json({ ...cache.data, cached:true });
 
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
   // ─── Fetch tất cả song song ───────────────────────────────────────────────
-  const results = await Promise.all(
-    Object.entries(SYMBOLS).map(([sym, ticker]) => fetchYahoo(sym, ticker))
+  const yResults = await Promise.all(
+    Object.entries(SYMBOLS).map(([sym,cfg]) => fetchYahoo(sym,cfg))
   );
 
-  // ─── Claude fallback cho symbols fail ────────────────────────────────────
-  const failed = results.filter(r => !r.ok).map(r => r.symbol);
-  let fallback = {};
-  if (failed.length > 0) {
-    fallback = await fetchViaClaude(failed, baseUrl);
-  }
+  // ─── Claude fallback cho failed + no-ticker ───────────────────────────────
+  const needClaude = yResults
+    .filter(r => !r.ok)
+    .map(r => ({ sym:r.sym, cfg:SYMBOLS[r.sym] }));
 
-  // ─── Build assets map ────────────────────────────────────────────────────
+  const claudeData = needClaude.length>0
+    ? await fetchViaClaude(needClaude, baseUrl)
+    : {};
+
+  // ─── Build assets map ─────────────────────────────────────────────────────
   const assets = {};
-  for (const r of results) {
-    assets[r.symbol] = {
-      price:   r.ok ? r.price : (fallback[r.symbol] || null),
-      chg:     r.chg,
+  for (const r of yResults) {
+    const cfg  = SYMBOLS[r.sym];
+    const fall = claudeData[r.sym];
+    assets[r.sym] = {
+      name:    cfg.name,
+      region:  cfg.region,
+      price:   r.ok ? r.price : (fall?.price||null),
+      chg:     r.ok ? r.chg   : (fall?.chg||0),
       history: r.history,
-      source:  r.ok ? 'yahoo' : (fallback[r.symbol] ? 'claude' : 'unavailable'),
+      source:  r.ok ? 'yahoo' : (fall?.price?'claude':'unavailable'),
+      corrDefault: cfg.corrDefault,
     };
   }
 
-  // ─── Cần Cu history để tính correlation ──────────────────────────────────
-  // Dùng GC=F (gold) history làm proxy nếu không có Cu riêng
-  // Cu history sẽ được pass vào từ client khi gọi correlation
+  // ─── Tính correlation dùng XAU làm Cu proxy ──────────────────────────────
   const cuProxy = assets.XAU?.history || [];
-
-  // ─── Tính rolling correlation Cu vs mỗi asset ────────────────────────────
   const correlations = {};
   for (const [sym, data] of Object.entries(assets)) {
-    if (data.history.length >= 5 && cuProxy.length >= 5) {
-      correlations[sym] = pearson(cuProxy, data.history);
-    } else {
-      // Fallback: known static correlations
-      correlations[sym] = {DXY:-0.75,SPX:0.62,XAU:0.45,XAG:0.78,PLAT:0.55,OIL:0.40,VIX:-0.55}[sym]||0;
-    }
+    correlations[sym] = data.history.length>=5 && cuProxy.length>=5
+      ? pearson(cuProxy, data.history)
+      : data.corrDefault;
   }
 
-  // ─── Signal logic ────────────────────────────────────────────────────────
-  function getSignal(sym, corr, chg) {
-    const aligned = (corr > 0 && chg > 0) || (corr < 0 && chg < 0);
-    if (Math.abs(corr) >= 0.70 && aligned) return { sig:'HỖ TRỢ MẠNH',  col:'#22c55e' };
-    if (Math.abs(corr) >= 0.50 && aligned) return { sig:'HỖ TRỢ TĂNG',  col:'#22c55e' };
-    if (Math.abs(corr) >= 0.70 && !aligned) return { sig:'CẢN TRỞ MẠNH', col:'#ef4444' };
-    if (Math.abs(corr) >= 0.50 && !aligned) return { sig:'CẢN TRỞ NHẸ',  col:'#f59e0b' };
-    return { sig:'TRUNG TÍNH', col:'#f59e0b' };
+  // ─── Build signals ────────────────────────────────────────────────────────
+  const signals = {};
+  for (const [sym, data] of Object.entries(assets)) {
+    signals[sym] = {
+      ...getSignal(correlations[sym]||0, data.chg||0),
+      corr: correlations[sym]||data.corrDefault,
+      chg:  data.chg||0,
+    };
   }
 
-  // ─── Final response ───────────────────────────────────────────────────────
-  const response = {
-    assets,
-    correlations,
-    signals: Object.fromEntries(
-      Object.entries(assets).map(([sym, d]) => [
-        sym,
-        getSignal(sym, correlations[sym]||0, d.chg||0),
-      ])
-    ),
-    updated_at: Date.now(),
-  };
-
-  cache = { data: response, ts: Date.now() };
-  return res.status(200).json(response);
+  const result = { assets, correlations, signals, updated_at:Date.now() };
+  cache = { data:result, ts:Date.now() };
+  return res.status(200).json(result);
 }
