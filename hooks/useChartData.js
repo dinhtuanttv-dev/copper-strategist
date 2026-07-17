@@ -1,202 +1,204 @@
-// ─── Data Controller: fetchMarketData → chart + all analysis engines ──────────
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+// hooks/useChartData.js v5 — FINAL
+// Flow: /api/ohlcv → s.priceChart prop → synthetic (luôn có dữ liệu)
+import { useState, useEffect, useCallback, useRef } from 'react';
 
-// ─── Fetch OHLCV từ Yahoo Finance (HG=F) ─────────────────────────────────────
-async function fetchMarketData(tf) {
-  const TF_MAP = {
-    MN:  { interval:'1mo', range:'10y'  },
-    W:   { interval:'1wk', range:'2y'   },
-    D:   { interval:'1d',  range:'1y'   },
-    H4:  { interval:'1h',  range:'60d'  },
-    H1:  { interval:'1h',  range:'7d'   },
-    M15: { interval:'15m', range:'5d'   },
-  };
-  const cfg = TF_MAP[tf] || TF_MAP.D;
+// ── Synthetic bars — chạy offline, không cần network ─────────────────────────
+function buildSyntheticBars(currentPrice, tf = 'H4', count = 60) {
+  const cp  = Math.max(currentPrice || 6.07, 0.01);
+  const now = Date.now();
+  const msPerBar = {
+    MN:30*24*3600*1000, W:7*24*3600*1000, D:24*3600*1000,
+    H4:4*3600*1000,     H1:3600*1000,     M15:15*60*1000,
+  }[tf] || 4*3600*1000;
 
-  try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/HG=F`
-      + `?interval=${cfg.interval}&range=${cfg.range}`;
-    const r   = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
-      signal:  AbortSignal.timeout(12000),
+  let price = cp * 0.965;
+  const vol = cp * 0.0012;
+  const bars = [];
+
+  for (let i = 0; i < count; i++) {
+    const trend = (cp - price) * 0.04;
+    const noise = (Math.random() - 0.48) * vol;
+    price = Math.max(cp * 0.85, price + trend + noise);
+    const oc   = [price, price + (Math.random()-0.5)*vol*0.5];
+    const high = Math.max(...oc) + Math.random()*vol*0.3;
+    const low  = Math.min(...oc) - Math.random()*vol*0.3;
+    bars.push({
+      ts:    now - (count - i) * msPerBar,
+      comex: +oc[1].toFixed(4),
+      open:  +oc[0].toFixed(4),
+      high:  +high.toFixed(4),
+      low:   +Math.max(low, 0.01).toFixed(4),
+      vol:   Math.floor(1000 + Math.random()*8000),
     });
-    if (!r.ok) throw new Error(`Yahoo HTTP ${r.status}`);
-    const d   = await r.json();
-    const res = d?.chart?.result?.[0];
-    if (!res) throw new Error('No result');
-
-    const timestamps = res.timestamp || [];
-    const q          = res.indicators?.quote?.[0] || {};
-
-    let bars = timestamps.map((ts, i) => ({
-      ts:    ts * 1000,
-      d:     new Date(ts * 1000).toLocaleDateString('vi-VN',
-               { day:'2-digit', month:'2-digit' }),
-      open:  q.open?.[i]  ? +q.open[i].toFixed(4)  : null,
-      high:  q.high?.[i]  ? +q.high[i].toFixed(4)  : null,
-      low:   q.low?.[i]   ? +q.low[i].toFixed(4)   : null,
-      comex: q.close?.[i] ? +q.close[i].toFixed(4) : null,
-      vol:   q.volume?.[i]|| 0,
-    })).filter(b => b.comex && b.comex > 0);
-
-    // H4: resample 1h → H4 (nhóm 4 nến)
-    if (tf === 'H4') {
-      const grouped = [];
-      for (let i = 0; i < bars.length; i += 4) {
-        const chunk = bars.slice(i, i + 4);
-        if (!chunk.length) continue;
-        grouped.push({
-          ts:    chunk[0].ts,
-          d:     chunk[0].d,
-          open:  chunk[0].open,
-          high:  Math.max(...chunk.map(b => b.high || b.comex)),
-          low:   Math.min(...chunk.map(b => b.low  || b.comex)),
-          comex: chunk[chunk.length - 1].comex,
-          vol:   chunk.reduce((s, b) => s + (b.vol || 0), 0),
-        });
-      }
-      bars = grouped;
-    }
-
-    return { bars, source:'yahoo', tf };
-  } catch(e) {
-    console.error(`fetchMarketData(${tf}):`, e.message);
-    return { bars:[], source:'error', tf, error:e.message };
+    price = oc[1];
   }
+
+  // Force last bar = exact current price
+  if (bars.length) {
+    const last  = bars[bars.length - 1];
+    last.comex  = cp;
+    last.high   = Math.max(last.high, cp);
+    last.low    = Math.min(last.low, cp);
+    last.ts     = now;
+  }
+  return bars;
 }
 
-// ─── Derived SMC data từ bars ─────────────────────────────────────────────────
-function buildSMCData(bars, currentPrice, atr = 0.12) {
-  if (!bars.length || !currentPrice) return null;
-  const a = atr;
-  return {
-    obBear:  [currentPrice + a * 1.0, currentPrice + a * 1.8],  // [from, to]
-    obBull:  [currentPrice - a * 2.0, currentPrice - a * 1.0],
-    fvg:     [currentPrice + a * 0.3, currentPrice + a * 0.7],
-    liq:      currentPrice - a * 2.5,
-    bos:      currentPrice - a * 0.1,
+// ── LocalStorage cache ────────────────────────────────────────────────────────
+const LS_KEY = 'cu_ohlcv_v5';
+const LS_TTL = 20 * 60 * 1000; // 20 phút
+
+function lsLoad() {
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    if (!raw) return {};
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > LS_TTL) { localStorage.removeItem(LS_KEY); return {}; }
+    return data || {};
+  } catch { return {}; }
+}
+
+function lsSave(data) {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+
+// ── Main hook ─────────────────────────────────────────────────────────────────
+export function useChartData(activeTF = 'H4', s = {}) {
+  const safeS    = s || {};
+  const cacheRef = useRef(lsLoad());
+
+  // Init state từ cache hoặc synthetic ngay lập tức
+  const getInitBars = () => {
+    const cached = cacheRef.current[activeTF] || [];
+    if (cached.length >= 3) return cached;
+    return buildSyntheticBars(safeS.comex || 6.07, activeTF, 60);
   };
-}
 
-// ─── LS cache helpers ─────────────────────────────────────────────────────────
-const LS_KEY      = 'cu_chart_data_v4';
-const LS_EXPIRE   = 30 * 60 * 1000;
+  const [bars,    setBars]    = useState(getInitBars);
+  const [loading, setLoading] = useState(false);
+  const [source,  setSource]  = useState('init');
+  const lastFetch = useRef({});
 
-function lsLoad(tf) {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = localStorage.getItem(`${LS_KEY}_${tf}`);
-    if (!raw) return null;
-    const p = JSON.parse(raw);
-    if (Date.now() - (p._ts || 0) > LS_EXPIRE) return null;
-    return p.bars || null;
-  } catch { return null; }
-}
+  const fetchBars = useCallback(async (tf, force = false) => {
+    const now  = Date.now();
+    const last = lastFetch.current[tf] || 0;
+    if (!force && now - last < 60_000) return; // debounce 60s
 
-function lsSave(tf, bars) {
-  if (typeof window === 'undefined') return;
-  try {
-    localStorage.setItem(`${LS_KEY}_${tf}`,
-      JSON.stringify({ bars, _ts: Date.now() }));
-  } catch { /* quota */ }
-}
-
-// ─── Main hook ────────────────────────────────────────────────────────────────
-export function useChartData(activeTF, s) {
-  const [bars, setBars]               = useState([]);
-  const [loading, setLoading]         = useState(false);
-  const [lastFetch, setLastFetch]     = useState(null);
-  const [error, setError]             = useState(null);
-  const fetchingRef                   = useRef(false);
-
-  // ─── Fetch + cache ───────────────────────────────────────────────────────
-  const refresh = useCallback(async (force = false) => {
-    if (fetchingRef.current) return;
-    // Cache check
-    if (!force && lastFetch && Date.now() - lastFetch < 5 * 60 * 1000) return;
-
-    fetchingRef.current = true;
-    setLoading(true);
-    setError(null);
-
-    // Try localStorage cache first
-    const cached = !force ? lsLoad(activeTF) : null;
-    if (cached?.length >= 5) {
+    const cached = cacheRef.current[tf] || [];
+    if (!force && cached.length >= 5) {
       setBars(cached);
-      setLastFetch(Date.now());
-      setLoading(false);
-      fetchingRef.current = false;
+      setSource('cache');
       return;
     }
 
-    const result = await fetchMarketData(activeTF);
-    if (result.bars.length > 0) {
-      setBars(result.bars);
-      lsSave(activeTF, result.bars);
-      setLastFetch(Date.now());
-    } else {
-      setError(result.error || 'Không lấy được dữ liệu');
+    setLoading(true);
+    lastFetch.current[tf] = now;
+    let result = null;
+
+    // Tầng 1: /api/ohlcv (Next.js server proxy — không CORS)
+    try {
+      const resp = await fetch(
+        `/api/ohlcv?tf=${tf}&symbol=HG%3DF`,
+        { signal: AbortSignal.timeout(12000) }
+      );
+      if (resp.ok) {
+        const json = await resp.json();
+        if (Array.isArray(json?.bars) && json.bars.length >= 5) {
+          result = json.bars;
+          setSource('yahoo');
+        }
+      }
+    } catch (e) {
+      console.warn('[useChartData] /api/ohlcv:', e.message);
     }
 
-    setLoading(false);
-    fetchingRef.current = false;
-  }, [activeTF, lastFetch]);
+    // Tầng 2: s.priceChart prop (daily data từ index.js)
+    if (!result && safeS.priceChart?.length >= 3) {
+      const cp = safeS.comex || 6.07;
+      result = safeS.priceChart.map((b, i, arr) => ({
+        ts:    Date.now() - (arr.length - i) * 86400000,
+        comex: b.comex || cp,
+        open:  b.comex || cp,
+        high:  (b.comex || cp) * 1.003,
+        low:   (b.comex || cp) * 0.997,
+        vol:   b.vol || 1000,
+      }));
+      setSource('priceChart');
+    }
 
-  // ─── Auto-fetch khi TF thay đổi ──────────────────────────────────────────
+    // Tầng 3: Stale cache
+    if (!result && cached.length >= 3) {
+      result = cached;
+      setSource('stale-cache');
+    }
+
+    // Tầng 4: Synthetic — LUÔN có dữ liệu
+    if (!result || result.length < 3) {
+      result = buildSyntheticBars(safeS.comex || 6.07, tf, 60);
+      setSource('synthetic');
+    }
+
+    // Update last candle = real-time price
+    if (safeS.comex > 0 && result.length > 0) {
+      const last2 = result[result.length - 1];
+      result = [
+        ...result.slice(0, -1),
+        {
+          ...last2,
+          comex: safeS.comex,
+          high:  Math.max(last2.high || 0, safeS.comex),
+          low:   Math.min(last2.low  || 9999, safeS.comex),
+          ts:    now,
+        },
+      ];
+    }
+
+    // Deduplicate & sort
+    const clean = result
+      .filter(b => b && b.comex > 0 && b.ts > 0)
+      .sort((a, b) => a.ts - b.ts)
+      .filter((v, i, a) => i === 0 || v.ts !== a[i-1].ts)
+      .slice(-120);
+
+    // Cache nếu không phải synthetic
+    if (!source?.includes('synthetic')) {
+      cacheRef.current = { ...cacheRef.current, [tf]: clean };
+      lsSave(cacheRef.current);
+    }
+
+    setBars(clean);
+    setLoading(false);
+  }, [safeS.comex, safeS.priceChart]);
+
+  // Auto-fetch khi TF đổi
   useEffect(() => {
-    refresh();
+    fetchBars(activeTF, false);
   }, [activeTF]);
 
-  // ─── Append realtime bar từ s.comex ──────────────────────────────────────
+  // Real-time tick update
   useEffect(() => {
-    if (!s?.comex || !bars.length) return;
-    const now = Date.now();
-    const bar = {
-      ts:    now,
-      d:     new Date(now).toLocaleDateString('vi-VN',
-               { day:'2-digit', month:'2-digit' }),
-      open:  s.comex,
-      high:  s.prev_high || s.comex,
-      low:   s.prev_low  || s.comex,
-      comex: s.comex,
-      vol:   s.session_vol || 100000,
-    };
+    if (!safeS.comex || safeS.comex <= 0) return;
     setBars(prev => {
-      if (!prev.length) return [bar];
+      if (!prev.length) return buildSyntheticBars(safeS.comex, activeTF, 60);
       const last = prev[prev.length - 1];
-      // Cùng ngày → update last candle
-      if (last.d === bar.d) {
-        const updated = {
+      return [
+        ...prev.slice(0, -1),
+        {
           ...last,
-          comex: bar.comex,
-          high:  Math.max(last.high || 0, bar.comex),
-          low:   Math.min(last.low  || Infinity, bar.comex),
-          vol:   (last.vol || 0) + (bar.vol || 0),
-        };
-        const next = [...prev.slice(0, -1), updated];
-        lsSave(activeTF, next);
-        return next;
-      }
-      // Ngày mới → append
-      const next = [...prev, bar].slice(-300);
-      lsSave(activeTF, next);
-      return next;
+          comex: safeS.comex,
+          high:  Math.max(last.high || 0, safeS.comex),
+          low:   Math.min(last.low  || 9999, safeS.comex),
+          ts:    Date.now(),
+        },
+      ];
     });
-  }, [s?.comex, activeTF]);
-
-  // ─── Derived SMC data ────────────────────────────────────────────────────
-  const smcData = useMemo(() =>
-    buildSMCData(bars, s?.comex, s?.atr || 0.12),
-    [bars, s?.comex, s?.atr]
-  );
+  }, [safeS.comex]);
 
   return {
     bars,
     loading,
-    error,
-    lastFetch,
-    smcData,
-    refresh,
     barCount: bars.length,
+    source,
+    refresh: (force = true) => fetchBars(activeTF, force),
   };
 }

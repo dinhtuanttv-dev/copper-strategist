@@ -1,0 +1,119 @@
+// pages/api/ohlcv.js — Yahoo Finance proxy, chạy server-side không bị CORS
+// Endpoint: GET /api/ohlcv?symbol=HG%3DF&interval=60m&range=30d
+
+const CACHE = new Map(); // in-memory cache per request key
+const CACHE_TTL = 5 * 60 * 1000; // 5 phút
+
+// Mapping TF → Yahoo range + interval
+const TF_MAP = {
+  MN:  { interval:'1mo', range:'2y'  },
+  W:   { interval:'1wk', range:'1y'  },
+  D:   { interval:'1d',  range:'6mo' },
+  H4:  { interval:'60m', range:'60d' },
+  H1:  { interval:'60m', range:'7d'  },
+  M15: { interval:'15m', range:'5d'  },
+};
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { tf = 'H4', symbol = 'HG=F' } = req.query;
+  const cfg = TF_MAP[tf] || TF_MAP.H4;
+  const cacheKey = `${symbol}_${tf}`;
+
+  // Check cache
+  const hit = CACHE.get(cacheKey);
+  if (hit && Date.now() - hit.ts < CACHE_TTL) {
+    res.setHeader('X-Cache', 'HIT');
+    return res.status(200).json({ bars: hit.bars, source: 'cache', tf });
+  }
+
+  // Yahoo Finance URL — chạy từ server không bị CORS
+  const encodedSym = encodeURIComponent(symbol);
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodedSym}` +
+    `?interval=${cfg.interval}&range=${cfg.range}&includePrePost=false`;
+
+  try {
+    const resp = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (!resp.ok) {
+      throw new Error(`Yahoo HTTP ${resp.status}`);
+    }
+
+    const json = await resp.json();
+    const result = json?.chart?.result?.[0];
+
+    if (!result) {
+      throw new Error('Yahoo: no result');
+    }
+
+    const timestamps = result.timestamp || [];
+    const quote      = result.indicators?.quote?.[0] || {};
+    const opens      = quote.open   || [];
+    const highs      = quote.high   || [];
+    const lows       = quote.low    || [];
+    const closes     = quote.close  || [];
+    const volumes    = quote.volume || [];
+
+    // Build bars array
+    const bars = timestamps
+      .map((ts, i) => ({
+        ts:    ts * 1000,
+        comex: closes[i]  || 0,
+        open:  opens[i]   || closes[i] || 0,
+        high:  highs[i]   || closes[i] || 0,
+        low:   lows[i]    || closes[i] || 0,
+        vol:   volumes[i] || 0,
+      }))
+      .filter(b => b.comex > 0 && b.ts > 0)
+      .sort((a, b) => a.ts - b.ts);
+
+    if (bars.length < 3) {
+      throw new Error(`Yahoo: only ${bars.length} bars`);
+    }
+
+    // Save to cache
+    CACHE.set(cacheKey, { bars, ts: Date.now() });
+
+    res.setHeader('X-Cache', 'MISS');
+    res.setHeader('X-Bars', bars.length);
+    return res.status(200).json({
+      bars,
+      source: 'yahoo',
+      tf,
+      symbol,
+      count: bars.length,
+      updated_at: Date.now(),
+    });
+
+  } catch (err) {
+    console.error(`[/api/ohlcv] ${tf} error:`, err.message);
+
+    // Trả về cached data cũ nếu có (stale)
+    const stale = CACHE.get(cacheKey);
+    if (stale?.bars?.length > 0) {
+      return res.status(200).json({
+        bars:   stale.bars,
+        source: 'stale-cache',
+        tf,
+        error:  err.message,
+      });
+    }
+
+    return res.status(503).json({
+      bars:   [],
+      error:  err.message,
+      tf,
+      source: 'error',
+    });
+  }
+}
