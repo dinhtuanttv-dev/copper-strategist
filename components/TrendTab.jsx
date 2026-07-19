@@ -767,8 +767,10 @@ function FibPanel({ safeS, ew, activeTF }) {
             background:isNow?`${C.blue}18`:C.bg,
             border:`0.5px solid ${isNow?C.blue:C.grid}`,
           }}>
-            <div style={{ fontSize:9, color:C.muted, flex:1 }}>{r.lbl}</div>
-            <div style={{ ...mono, fontSize:11, fontWeight:700, color:r.col }}>
+            <div style={{ fontSize:8, color:C.muted, flex:1,
+              overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap',
+              minWidth:0 }}>{r.lbl}</div>
+            <div style={{ ...mono, fontSize:10, fontWeight:700, color:r.col, flexShrink:0 }}>
               ${r.p.toFixed(3)}
             </div>
             <span style={{ fontSize:7, ...mono, color:d>=0?C.green:C.red }}>
@@ -1210,13 +1212,13 @@ export default function TrendTab({ s, verdict, bias }) {
   const TF_LIST = ['MN','W','D','H4','H1','M15'];
 
   return (
-    <div style={{ display:'grid', gap:8 }}>
+    <div style={{ display:'grid', gap:8, width:'100%', boxSizing:'border-box' }}>
 
       {/* ── Timeframe bar ── */}
       <div style={{ display:'flex', gap:4, alignItems:'center',
         background:C.bg, borderRadius:9,
-        padding:'6px 10px', border:`1px solid ${C.grid}`,
-        flexWrap:'wrap' }}>
+        padding:'5px 8px', border:`1px solid ${C.grid}`,
+        flexWrap:'wrap', width:'100%', boxSizing:'border-box' }}>
         <span style={{ fontSize:9,color:C.muted,fontWeight:600,marginRight:3 }}>
           TIMEFRAME:
         </span>
@@ -1256,16 +1258,18 @@ export default function TrendTab({ s, verdict, bias }) {
 
       {shortSetup?.active && <ShortSetupPanel ss={shortSetup}/>}
 
-      {/* ── 3-col layout ── */}
+      {/* ── 3-col layout FINAL FIX ── */}
       <div style={{
         display:'grid',
-        gridTemplateColumns:'minmax(0,215px) minmax(0,1fr) minmax(0,205px)',
+        gridTemplateColumns:'minmax(160px,22%) minmax(0,1fr) minmax(160px,22%)',
         gap:8,
         alignItems:'start',
+        width:'100%',
+        boxSizing:'border-box',
       }}>
 
         {/* LEFT */}
-        <div style={{ display:'grid', gap:8, minWidth:0 }}>
+        <div style={{ display:'grid', gap:8, minWidth:0, width:'100%', overflow:'hidden' }}>
           <FibPanel safeS={safeS} ew={ew} activeTF={activeTF}/>
           <MultiMethodPanel scores={scores} bias={bias||0}
             activeTF={activeTF} shortSetup={shortSetup}/>
@@ -1279,8 +1283,8 @@ export default function TrendTab({ s, verdict, bias }) {
           />
         </div>
 
-        {/* CENTER — PriceChart gọi useChartData bên trong */}
-        <div style={{ display:'grid', gap:8, minWidth:0 }}>
+        {/* CENTER */}
+        <div style={{ display:'grid', gap:8, minWidth:0, width:'100%', overflow:'hidden' }}>
           <PriceChart
             safeS={safeS}
             activeTF={activeTF}
@@ -1300,7 +1304,7 @@ export default function TrendTab({ s, verdict, bias }) {
         </div>
 
         {/* RIGHT */}
-        <div style={{ display:'grid', gap:8, minWidth:0 }}>
+        <div style={{ display:'grid', gap:8, minWidth:0, width:'100%', overflow:'hidden' }}>
           <WyckoffPanel wyckoff={wyckoff}/>
           <SMCPanel safeS={safeS} atr={atr}/>
           <HarmonicPanel safeS={safeS}/>
