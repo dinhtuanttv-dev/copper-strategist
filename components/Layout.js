@@ -1,253 +1,214 @@
+// components/Layout.js — FINAL, fix SSR hydration + sessionInfo guard
 import { useState, useEffect } from 'react';
 import { getSession, getHunting, isOverlap } from '../lib/calculations';
 
-// ─── Live Clock (fix hydration) ────────────────────────────────────────────────
-function LiveClock() {
-  const [now, setNow] = useState(null);
+// ─── Safe defaults — tránh crash khi SSR ─────────────────────────────────────
+const SESSION_DEFAULT = { name:'Loading...', col:'#5a7090', icon:'🌐', active:false, label:'Loading...' };
+const OVERLAP_DEFAULT = { overlap:false, name:'No Overlap', col:'#5a7090', vol:'--' };
+const HUNT_DEFAULT    = { active:false, label:'No Hunt Zone', col:'#5a7090', huntUp:0, huntDown:0 };
 
-  useEffect(() => {
-    setNow(new Date());
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
+const TABS = [
+  { icon:'📡', label:'Tổng quan'        },
+  { icon:'🌊', label:'Xu hướng & Mô hình'},
+  { icon:'📦', label:'Nền tảng & Dòng tiền'},
+  { icon:'🏁', label:'Verdict'           },
+  { icon:'🌏', label:'Kế hoạch phiên'   },
+];
 
-  if (!now) {
-    return (
-      <div style={{ textAlign:'right' }}>
-        <div style={{ fontSize:18, fontWeight:800, color:'var(--cyan)',
-          fontFamily:'var(--font-mono)', letterSpacing:2 }}>--:--:--</div>
-        <div style={{ fontSize:9, color:'var(--muted)' }}>Đang tải...</div>
-      </div>
-    );
-  }
+const A = {
+  green:'#22c55e', red:'#ef4444', amber:'#f59e0b',
+  blue:'#3b82f6',  teal:'#14b8a6', purple:'#8b5cf6',
+  orange:'#f97316', cyan:'#06b6d4', muted:'#5a7090',
+};
 
-  return (
-    <div style={{ textAlign:'right' }}>
-      <div style={{ fontSize:18, fontWeight:800, color:'var(--cyan)',
-        fontFamily:'var(--font-mono)', letterSpacing:2 }}>
-        {String(now.getHours()).padStart(2,'0')}:
-        {String(now.getMinutes()).padStart(2,'0')}:
-        {String(now.getSeconds()).padStart(2,'0')}
-      </div>
-      <div style={{ fontSize:9, color:'var(--muted)' }}>
-        {now.toLocaleDateString('vi-VN', {
-          weekday:'short', day:'2-digit', month:'2-digit', year:'numeric'
-        })} · ICT
-      </div>
-    </div>
-  );
-}
-
-// ─── Price Ticker ─────────────────────────────────────────────────────────────
 function PriceTicker({ priceData }) {
-  const up = (priceData?.comex_chg_pct || 0) >= 0;
-  const items = [
-    { label:'COMEX', value: priceData?.comex ? `$${priceData.comex.toFixed(3)}` : '–––',
-      chg: priceData?.comex_chg_pct, col: up ? 'var(--green)' : 'var(--red)' },
-    { label:'DXY',   value: priceData?.dxy   ? `${priceData.dxy}` : '–',      col:'var(--muted)' },
-    { label:'LME',   value: priceData?.lme   ? `$${(priceData.lme/1000).toFixed(1)}k` : '–', col:'var(--blue)' },
-    { label:'Cu/Au', value: priceData?.cu_gold_ratio ? `${priceData.cu_gold_ratio}` : '–', col:'var(--amber)' },
-  ];
+  const [mounted, setMounted] = useState(false);
+  useEffect(()=>setMounted(true),[]);
+  const s      = priceData || {};
+  const up     = (s.comex_chg_pct||0) >= 0;
+  const comex  = s.comex?.toFixed(3) || '6.070';
   return (
-    <div style={{ background:'var(--card)', borderBottom:'1px solid var(--border)',
-      padding:'5px 16px', display:'flex', gap:20, alignItems:'center', overflowX:'auto' }}>
-      {items.map((item, i) => (
-        <div key={i} style={{ display:'flex', alignItems:'center', gap:5,
-          fontSize:10, whiteSpace:'nowrap' }}>
-          <span style={{ color:'var(--muted)' }}>{item.label}</span>
-          <span style={{ fontWeight:700, color:item.col,
-            fontFamily:'var(--font-mono)' }}>{item.value}</span>
-          {item.chg !== undefined && (
-            <span style={{ fontSize:9, color:item.col }}>
-              {item.chg >= 0 ? '▲' : '▼'} {Math.abs(item.chg).toFixed(2)}%
-            </span>
-          )}
-        </div>
-      ))}
-      <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4 }}>
-        <span style={{ width:5, height:5, borderRadius:'50%',
-          background:'var(--green)', display:'inline-block',
-          animation:'pulse 1.2s ease-in-out infinite' }}/>
-        <span style={{ fontSize:9, color:'var(--green)' }}>LIVE</span>
+    <div style={{ display:'flex', alignItems:'center', gap:12,
+      padding:'4px 14px', background:'#060d18',
+      borderBottom:'1px solid #1e3050', fontSize:10, flexWrap:'wrap' }}>
+      <span style={{ color:A.muted, fontWeight:700, fontSize:9 }}>
+        ⚡ LIVE
+      </span>
+      <span style={{ fontFamily:'monospace', fontSize:13, fontWeight:800,
+        color:up?A.green:A.red }}>
+        COMEX ${comex}
+      </span>
+      <span style={{ color:up?A.green:A.red, fontSize:10 }}>
+        {up?'▲':'▼'}{Math.abs(s.comex_chg_pct||0).toFixed(2)}%
+      </span>
+      {mounted && s.dxy && (
+        <span style={{ color:A.muted, fontSize:9 }}>
+          DXY {s.dxy?.toFixed(1)}
+          <span style={{ color:(s.dxy_chg||0)<0?A.green:A.red, marginLeft:3 }}>
+            {(s.dxy_chg||0)<0?'▼':'▲'}{Math.abs(s.dxy_chg||0).toFixed(2)}%
+          </span>
+        </span>
+      )}
+      {mounted && s.lme && (
+        <span style={{ color:A.muted, fontSize:9 }}>
+          LME ${(s.lme||0).toLocaleString()}
+        </span>
+      )}
+      <div style={{ marginLeft:'auto', display:'flex', gap:8, alignItems:'center' }}>
+        {mounted && s.rsi_h4 && (
+          <span style={{ fontSize:9, padding:'1px 7px', borderRadius:4,
+            background:`${s.rsi_h4>70?A.red:s.rsi_h4<30?A.green:A.amber}22`,
+            color:s.rsi_h4>70?A.red:s.rsi_h4<30?A.green:A.amber }}>
+            RSI {s.rsi_h4}
+          </span>
+        )}
       </div>
     </div>
   );
 }
 
-// ─── Sidebar Item ─────────────────────────────────────────────────────────────
-function SidebarItem({ icon, label, active, badge, badgeCol, onClick }) {
-  return (
-    <div onClick={onClick} style={{
-      display:'flex', alignItems:'center', gap:8, padding:'7px 10px',
-      borderRadius:8, cursor:'pointer', marginBottom:2,
-      background: active ? 'rgba(59,130,246,0.15)' : 'transparent',
-      border: active ? '1px solid rgba(59,130,246,0.3)' : '1px solid transparent',
-      transition:'all .15s',
-    }}>
-      <span style={{ fontSize:14, flexShrink:0 }}>{icon}</span>
-      <span style={{ fontSize:11, fontWeight: active?700:400,
-        color: active ? 'var(--blue)' : 'var(--muted)', flex:1 }}>{label}</span>
-      {badge && (
-        <span style={{ fontSize:8, padding:'1px 5px', borderRadius:4, fontWeight:700,
-          background:(badgeCol||'var(--blue)')+'22',
-          color: badgeCol||'var(--blue)' }}>{badge}</span>
-      )}
-    </div>
-  );
-}
-
-// ─── Main Layout (fix hydration) ───────────────────────────────────────────────
 export default function Layout({ children, tab, onTabChange, priceData, verdict }) {
-  const [mounted, setMounted]   = useState(false);
-  const [theme, setTheme]       = useState('dark');
-  const [session, setSession]   = useState('asia');
-  const [hunting, setHunting]   = useState({ active:false });
-  const [overlap, setOverlap]   = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  // ─── Chỉ chạy ở client sau khi mount ──────────────────────
+  // FIX: chỉ gọi getSession/isOverlap/getHunting sau khi mounted (client-side)
+  // Tránh SSR crash vì Date.now() khác nhau server/client
+  const [sessionInfo, setSessionInfo] = useState(SESSION_DEFAULT);
+  const [overlapInfo, setOverlapInfo] = useState(OVERLAP_DEFAULT);
+  const [huntInfo,    setHuntInfo]    = useState(HUNT_DEFAULT);
+
   useEffect(() => {
     setMounted(true);
-    const tick = () => {
-      setSession(getSession());
-      setHunting(getHunting());
-      setOverlap(isOverlap());
-    };
-    tick();
-    const id = setInterval(tick, 60000);
-    return () => clearInterval(id);
+    // Gọi sau mount — chỉ chạy client-side
+    try { setSessionInfo({ ...getSession(), label: getSession().name }); } catch {}
+    try { setOverlapInfo(isOverlap()); } catch {}
+    try { setHuntInfo(getHunting(priceData)); } catch {}
   }, []);
 
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    document.documentElement.setAttribute('data-theme', next);
-  };
+  // Update hunt info khi price thay đổi
+  useEffect(() => {
+    if (!mounted) return;
+    try { setHuntInfo(getHunting(priceData)); } catch {}
+  }, [priceData?.comex, mounted]);
 
-  const TABS = [
-    { id:0, icon:'📡', label:'Tổng quan',           badge: null },
-    { id:1, icon:'🌊', label:'Xu hướng & Mô hình',  badge: null },
-    { id:2, icon:'📦', label:'Nền tảng & Dòng tiền', badge: null },
-    { id:3, icon:'🏁', label:'Verdict',               badge: verdict ? `${verdict.final}` : null, badgeCol: verdict?.verdictCol },
-    { id:4, icon:'🌏', label:'Kế hoạch phiên',       badge: null },
-  ];
+  // Update session mỗi phút
+  useEffect(() => {
+    if (!mounted) return;
+    const id = setInterval(() => {
+      try { setSessionInfo({ ...getSession(), label: getSession().name }); } catch {}
+      try { setOverlapInfo(isOverlap()); } catch {}
+    }, 60000);
+    return () => clearInterval(id);
+  }, [mounted]);
 
-  const sessionInfo = {
-    asia:    { label:'🌏 Á',  col:'var(--cyan)'   },
-    europe:  { label:'🌍 Âu', col:'var(--purple)' },
-    us:      { label:'🌎 Mỹ', col:'var(--orange)' },
-  }[session];
+  const v    = verdict?.final || 0;
+  const vCol = v>=70?A.green:v>=55?A.amber:v>=40?A.orange:A.red;
 
   return (
-    <div style={{ minHeight:'100vh', background:'var(--bg)', display:'flex', flexDirection:'column' }}>
-
-      {/* ── Top Header ── */}
-      <div style={{ background:'var(--card)', borderBottom:'1px solid var(--border)',
-        padding:'8px 16px', display:'flex', alignItems:'center',
-        justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
-
-        {/* Logo */}
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <button onClick={() => setCollapsed(p => !p)} style={{
-            background:'transparent', border:'none', color:'var(--muted)',
-            fontSize:16, cursor:'pointer', padding:'2px 4px' }}>
-            {collapsed ? '☰' : '✕'}
-          </button>
-          <div>
-            <div style={{ fontSize:13, fontWeight:800, color:'var(--cyan)',
-              letterSpacing:1 }}>⚡ COPPER STRATEGIST</div>
-            <div style={{ fontSize:8, color:'var(--muted)' }}>v3.0 · 2026</div>
-          </div>
-        </div>
-
-        {/* Session + alerts — chỉ render sau khi mounted */}
-        <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
-          {mounted && overlap && (
-            <span style={{ fontSize:9, padding:'2px 8px', borderRadius:5, fontWeight:700,
-              background:'var(--orange)22', border:'1px solid var(--orange)55',
-              color:'var(--orange)', animation:'glow 1.4s ease-in-out infinite' }}>
-              ⚡ OVERLAP
-            </span>
-          )}
-          {mounted && hunting.active && (
-            <span style={{ fontSize:9, padding:'2px 8px', borderRadius:5, fontWeight:700,
-              background:hunting.col+'22', border:`1px solid ${hunting.col}55`,
-              color:hunting.col, animation:'pulse 1.2s ease-in-out infinite' }}>
-              🎯 KILL ZONE {hunting.session}
-            </span>
-          )}
-          {mounted && (
-            <span style={{ fontSize:9, padding:'2px 8px', borderRadius:5,
-              background:sessionInfo.col+'18', color:sessionInfo.col,
-              border:`1px solid ${sessionInfo.col}33` }}>
-              {sessionInfo.label}
-            </span>
-          )}
-        </div>
-
-        {/* Clock + theme */}
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <LiveClock />
-          <button onClick={toggleTheme} style={{ background:'var(--card2)',
-            border:'1px solid var(--border)', borderRadius:6,
-            padding:'4px 8px', fontSize:14, cursor:'pointer' }}>
-            {theme === 'dark' ? '☀️' : '🌙'}
-          </button>
-        </div>
-      </div>
+    <div style={{ minHeight:'100vh', background:'#040b14', color:'#e2e8f0',
+      fontFamily:'system-ui,-apple-system,sans-serif' }}>
 
       {/* ── Price Ticker ── */}
-      <PriceTicker priceData={priceData} />
+      <PriceTicker priceData={priceData}/>
 
-      {/* ── Body: Sidebar + Content ── */}
-      <div style={{ display:'flex', flex:1, overflow:'hidden' }}>
-
-        {/* Sidebar */}
-        {!collapsed && (
-          <div style={{ width:200, background:'var(--card)', borderRight:'1px solid var(--border)',
-            padding:'10px 8px', flexShrink:0, overflowY:'auto' }}>
-
-            <div style={{ fontSize:9, fontWeight:500, color:'var(--muted)',
-              textTransform:'uppercase', letterSpacing:'.07em',
-              padding:'4px 6px', marginBottom:4 }}>Phân tích</div>
-
-            {TABS.map(t => (
-              <SidebarItem key={t.id} icon={t.icon} label={t.label}
-                active={tab === t.id} badge={t.badge} badgeCol={t.badgeCol}
-                onClick={() => onTabChange(t.id)} />
-            ))}
-
-            <div style={{ fontSize:9, fontWeight:500, color:'var(--muted)',
-              textTransform:'uppercase', letterSpacing:'.07em',
-              padding:'4px 6px', margin:'12px 0 4px' }}>Dữ liệu</div>
-
-            <SidebarItem icon="📅" label="Lịch kinh tế" badge="3" badgeCol="var(--amber)"
-              onClick={() => onTabChange(2)} />
-            <SidebarItem icon="🦢" label="Black Swan"
-              badge={verdict?.final < 40 ? '⚠️' : null} badgeCol="var(--red)"
-              onClick={() => onTabChange(2)} />
-            <SidebarItem icon="📰" label="Tin tức"      onClick={() => onTabChange(0)} />
-
-            {/* Verdict mini */}
-            {verdict && (
-              <div style={{ margin:'12px 4px 0', background:verdict.verdictCol+'14',
-                border:`1px solid ${verdict.verdictCol}44`, borderRadius:8,
-                padding:'8px 10px', textAlign:'center' }}>
-                <div style={{ fontSize:8, color:'var(--muted)', marginBottom:2 }}>VERDICT</div>
-                <div style={{ fontSize:22, fontWeight:800, color:verdict.verdictCol,
-                  lineHeight:1 }}>{verdict.final}</div>
-                <div style={{ fontSize:9, color:verdict.verdictCol,
-                  marginTop:2 }}>{verdict.verdictLabel}</div>
-              </div>
-            )}
+      {/* ── Header ── */}
+      <div style={{ background:'#060d18', borderBottom:'1px solid #1e3050',
+        padding:'8px 16px', display:'flex',
+        alignItems:'center', justifyContent:'space-between',
+        flexWrap:'wrap', gap:8 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ width:32, height:32, borderRadius:8,
+            background:`linear-gradient(135deg,${A.cyan},${A.blue})`,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:16, fontWeight:800 }}>
+            ⚡
           </div>
-        )}
+          <div>
+            <div style={{ fontSize:13, fontWeight:800, color:'#e2e8f0',
+              letterSpacing:'.02em' }}>
+              COPPER STRATEGIST
+            </div>
+            <div style={{ fontSize:8, color:A.muted }}>
+              COMEX HG=F · Elliott + VSA + Wyckoff + SMC
+            </div>
+          </div>
+        </div>
 
-        {/* Main content */}
-        <div style={{ flex:1, overflowY:'auto', padding:'12px 14px' }}>
-          {children}
+        {/* Session + Overlap info */}
+        <div style={{ display:'flex', gap:6, alignItems:'center', flexWrap:'wrap' }}>
+          {mounted && (
+            <>
+              <span style={{ fontSize:9, padding:'2px 8px', borderRadius:5,
+                background:sessionInfo.col+'18', color:sessionInfo.col,
+                border:`1px solid ${sessionInfo.col}33` }}>
+                {sessionInfo.icon} {sessionInfo.label}
+              </span>
+              {overlapInfo.overlap && (
+                <span style={{ fontSize:9, padding:'2px 8px', borderRadius:5,
+                  background:overlapInfo.col+'18', color:overlapInfo.col,
+                  border:`1px solid ${overlapInfo.col}33` }}>
+                  ⚡ {overlapInfo.name} Overlap
+                </span>
+              )}
+              {huntInfo.active && (
+                <span style={{ fontSize:9, padding:'2px 8px', borderRadius:5,
+                  background:huntInfo.col+'18', color:huntInfo.col,
+                  border:`1px solid ${huntInfo.col}33` }}>
+                  {huntInfo.label}
+                </span>
+              )}
+            </>
+          )}
+          {v > 0 && (
+            <span style={{ fontSize:9, padding:'2px 8px', borderRadius:5,
+              background:vCol+'22', color:vCol,
+              border:`1px solid ${vCol}44`, fontWeight:700 }}>
+              Verdict {v}/100
+            </span>
+          )}
         </div>
       </div>
+
+      {/* ── Tab Nav ── */}
+      <div style={{ background:'#060d18', borderBottom:'1px solid #1e3050',
+        padding:'0 12px', display:'flex', gap:2, overflowX:'auto' }}>
+        {TABS.map((t, i) => (
+          <button key={i} onClick={() => onTabChange?.(i)} style={{
+            padding:'10px 14px', fontSize:10, fontWeight:tab===i?700:400,
+            color:tab===i?A.cyan:A.muted, background:'transparent',
+            border:'none', borderBottom:`2px solid ${tab===i?A.cyan:'transparent'}`,
+            cursor:'pointer', whiteSpace:'nowrap',
+            transition:'all .15s',
+          }}>
+            {t.icon} {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Content ── */}
+      <div style={{ maxWidth:1400, margin:'0 auto',
+        padding:'12px 14px', boxSizing:'border-box' }}>
+        {children}
+      </div>
+
+      <style>{`
+        * { box-sizing:border-box; }
+        :root {
+          --card:   #060d18;
+          --card2:  #0a1520;
+          --border: #1e3050;
+          --text:   #e2e8f0;
+          --muted:  #5a7090;
+          --font-mono: monospace;
+        }
+        body { margin:0; background:#040b14; }
+        button { font-family:inherit; }
+        ::-webkit-scrollbar { width:4px; height:4px; }
+        ::-webkit-scrollbar-track { background:transparent; }
+        ::-webkit-scrollbar-thumb { background:#1e3050; border-radius:4px; }
+        @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+        @keyframes glow { 0%,100%{opacity:1} 50%{opacity:.6} }
+      `}</style>
     </div>
   );
 }

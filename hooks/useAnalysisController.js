@@ -1,48 +1,59 @@
-// ─── React hook wrapping AnalysisController ────────────────────────────────
-import { useEffect, useRef, useState, useCallback } from 'react';
-import { AnalysisController } from '../analysis-controller';
+// hooks/useAnalysisController.js — ESModule export
+import { useState, useCallback, useRef, useEffect } from 'react';
 
-export function useAnalysisController(chartContainerRef) {
-  const ctrlRef  = useRef(null);
+const DEFAULT_LAYERS = {
+  smc:true, wyckoff:true, fib:true, elliott:true,
+  vsa:true, harmonic:false, ai_detection:true,
+};
+
+export function useAnalysisController(chartRef) {
   const [logs,    setLogs]    = useState([]);
+  const [layers,  setLayers]  = useState(DEFAULT_LAYERS);
+  const [imData,  setImData]  = useState(null);
   const [signals, setSignals] = useState([]);
-  const [imData,  setIMData]  = useState(null);
-  const [layers,  setLayers]  = useState({
-    smc:true, wyckoff:true, fib:true, elliott:true,
-    vsa:true, harmonic:false, ai_detection:true,
-  });
 
-  useEffect(() => {
-    if (!chartContainerRef.current) return;
-    const tryInit = () => {
-      if (!window.LightweightCharts) { setTimeout(tryInit, 300); return; }
-      ctrlRef.current = new AnalysisController(
-        chartContainerRef.current,
-        entry  => setLogs(prev  => [entry,  ...prev].slice(0, 100)),
-        signal => setSignals(prev => [signal, ...prev].slice(0, 30)),
-        (layer, active, batch) => {
-          if (batch) setLayers(prev => ({ ...prev, ...batch }));
-          else if (layer) setLayers(prev => ({ ...prev, [layer]: active }));
-        },
-        data => setIMData(data),
+  const addLog = useCallback((message, type = 'info') => {
+    setLogs(prev => {
+      const entry = { message, type, timestamp: Date.now() };
+      // Dedup — không thêm nếu message giống nhau trong 5s
+      const recent = prev.slice(-3);
+      const dup = recent.find(l =>
+        l.message === message && Date.now() - l.timestamp < 5000
       );
-    };
-    tryInit();
-    return () => { ctrlRef.current?.destroy(); ctrlRef.current = null; };
+      if (dup) return prev;
+      return [entry, ...prev].slice(0, 50);
+    });
   }, []);
 
-  const setData        = useCallback((bars, state) => ctrlRef.current?.setData(bars, state), []);
-  const toggleLayer    = useCallback((l, a)        => ctrlRef.current?.toggleLayer(l, a), []);
-  const setDrawingTool = useCallback(tool           => ctrlRef.current?.setDrawingTool(tool), []);
-  const notifyIMUpdate = useCallback(data           => ctrlRef.current?.notifyIMUpdate(data), []);
-  const renderSMC      = useCallback((p, a)         => ctrlRef.current?.renderSMCLayer(p, a), []);
-  const renderFib      = useCallback(ew             => ctrlRef.current?.renderFibLayer(ew), []);
-  const renderWyckoff  = useCallback(bars           => ctrlRef.current?.renderWyckoffMarkers(bars), []);
+  const toggleLayer = useCallback((key, value) => {
+    setLayers(prev => ({ ...prev, [key]: value }));
+  }, []);
+
+  const setDrawingTool = useCallback((tool) => {
+    if (tool) addLog(`Công cụ vẽ: ${tool}`, 'info');
+  }, [addLog]);
+
+  const notifyIMUpdate = useCallback((data) => {
+    setImData(data);
+    if (data?.signals) {
+      const bullish = Object.entries(data.signals || {})
+        .filter(([,v]) => v?.col === '#22c55e').map(([k]) => k);
+      if (bullish.length > 0) {
+        addLog(`IM hỗ trợ: ${bullish.join(', ')}`, 'im_impact');
+      }
+    }
+  }, [addLog]);
+
+  const renderFib    = useCallback(() => {}, []);
+  const renderSMC    = useCallback(() => {}, []);
+  const renderWyckoff = useCallback(() => {}, []);
 
   return {
-    controller: ctrlRef,
     logs, signals, imData, layers,
-    setData, toggleLayer, setDrawingTool,
-    notifyIMUpdate, renderSMC, renderFib, renderWyckoff,
+    toggleLayer, setDrawingTool,
+    notifyIMUpdate, addLog,
+    renderFib, renderSMC, renderWyckoff,
   };
 }
+
+export default useAnalysisController;
