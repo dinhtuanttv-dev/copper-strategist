@@ -7,6 +7,7 @@ import Layout           from '../components/Layout';
 import RadarChart       from '../components/RadarChart';
 import FundamentalsTab  from '../components/FundamentalsTab';
 import TrendTab         from '../components/TrendTab';
+import VerdictProElite  from '../components/VerdictProElite';
 import { useRadarData } from '../hooks/useRadarData';
 import {
   A, calcVSA, calcElliott, calcTI, calcMH, calcVerdict,
@@ -731,6 +732,12 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
   const rLabel   = regime==='risk_off'?'⚠️ RISK-OFF':regime==='stagflation'?'🌡️ STAGFLATION':'✅ RISK-ON';
   const rCol     = regime==='risk_off'?A.red:regime==='stagflation'?A.orange:A.green;
 
+  // TODO: Chưa có hàm tính Wyckoff phase trong lib/calculations.
+  // Tạm truyền null cho VerdictProElite; nếu bạn có calcWyckoff(),
+  // import và thay dòng dưới bằng:
+  // const wyckoff = useMemo(()=>calcWyckoff(s.priceChart, vsa, ew),[s.priceChart,vsa,ew]);
+  const wyckoff = null;
+
   // ─── RENDER ────────────────────────────────────────────────
   return (
     <Layout tab={tab} onTabChange={setTab} priceData={s} verdict={verdict}>
@@ -971,73 +978,18 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
         />
       )}
 
-      {/* ══ TAB 3: Verdict ═══════════════════════════════════ */}
+      {/* ══ TAB 3: Verdict (VerdictProElite) ════════════════ */}
       {tab===3&&(
-        <div style={{ display:'grid', gap:10 }}>
-          <Card glow={verdict.verdictCol}>
-            <div style={{ fontSize:12, fontWeight:800, marginBottom:12 }}>
-              🏁 THE FINAL VERDICT
-            </div>
-            <div style={{ display:'grid',
-              gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',
-              gap:8, marginBottom:12 }}>
-              {[
-                {icon:'🏗️',lbl:'PK1',score:ti.pk1Score,col:ti.pk1Col,thr:65},
-                {icon:'🏗️',lbl:'PK2',score:mh.pk2Score,col:mh.pk2Col,thr:60},
-                {icon:'⚖️',lbl:'Bias',score:bias,col:sigCol,thr:60},
-              ].map((m,i)=>(
-                <div key={i} style={{
-                  background:m.score>=m.thr?m.col+'14':'var(--card2)',
-                  border:`2px solid ${m.score>=m.thr?m.col:'var(--border)'}`,
-                  borderRadius:10, padding:'11px', textAlign:'center' }}>
-                  <div style={{ fontSize:12, marginBottom:3 }}>{m.icon}</div>
-                  <div style={{ fontSize:10, color:'var(--muted)',
-                    marginBottom:3 }}>{m.lbl}</div>
-                  <div style={{ fontSize:28, fontWeight:800,
-                    color:m.col }}>{m.score}</div>
-                  <div style={{ fontSize:8, color:'var(--muted)',
-                    marginBottom:5 }}>ngưỡng ≥ {m.thr}</div>
-                  <Chip label={m.score>=m.thr?'✅ ĐẠT':'⏳ CHƯA'}
-                    color={m.score>=m.thr?m.col:A.red} size={9} />
-                </div>
-              ))}
-            </div>
-            <div style={{ background:verdict.verdictCol+'18',
-              border:`2px solid ${verdict.verdictCol}`,
-              borderRadius:12, padding:'14px',
-              textAlign:'center', marginBottom:10 }}>
-              <div style={{ fontSize:12, fontWeight:800,
-                color:verdict.verdictCol, marginBottom:4 }}>
-                {verdict.verdictLabel}
-              </div>
-              <div style={{ fontSize:40, fontWeight:800,
-                color:verdict.verdictCol, lineHeight:1 }}>
-                {verdict.final}
-              </div>
-              <div style={{ fontSize:10, color:'var(--muted)', margin:'4px 0' }}>
-                /100
-              </div>
-              <div style={{ background:'var(--border)', borderRadius:5,
-                height:9, overflow:'hidden', margin:'8px 0' }}>
-                <div style={{ width:`${verdict.final}%`, height:'100%',
-                  background:verdict.verdictCol }} />
-              </div>
-              <div style={{ fontSize:10, color:'var(--muted)' }}>
-                {verdict.verdictDesc}
-              </div>
-            </div>
-            <FetchBtn onClick={()=>doVerdict(verdict,ti,mh,bias)}
-              loading={loadVerdict}
-              label="🧠 AI Phân tích chuyên sâu"
-              icon="🧠" col={A.purple} />
-            {verdictText&&(
-              <div style={{ marginTop:10, background:A.purple+'08',
-                borderRadius:8, padding:'12px', fontSize:11,
-                color:'var(--text)', lineHeight:1.9,
-                whiteSpace:'pre-line' }}>{verdictText}</div>
-            )}
-          </Card>
-        </div>
+        <VerdictProElite
+          s={s}
+          ew={ew}
+          vsa={vsa}
+          wyckoff={wyckoff}
+          mh={mh}
+          verdict={verdict}
+          atr={s?.atr || 0.12}
+          blackSwans={bsEvents}
+        />
       )}
 
       {/* ══ TAB 4: Kế hoạch phiên ════════════════════════════ */}
