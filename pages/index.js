@@ -3,12 +3,12 @@ import {
   ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip,
   AreaChart, Area, ComposedChart, Bar, Line,
 } from 'recharts';
-import Layout           from '../components/Layout';
-import RadarChart       from '../components/RadarChart';
-import FundamentalsTab  from '../components/FundamentalsTab';
-import TrendTab         from '../components/TrendTab';
-import VerdictProElite  from '../components/VerdictProElite';
-import { useRadarData } from '../hooks/useRadarData';
+import Layout            from '../components/Layout';
+import RadarChart        from '../components/RadarChart';
+import FundamentalsTab   from '../components/FundamentalsTab';
+import TrendTab          from '../components/TrendTab';
+import VerdictProElite   from '../components/VerdictProElite'; // ← NEW: Verdict Pro Elite
+import { useRadarData }  from '../hooks/useRadarData';
 import {
   A, calcVSA, calcElliott, calcTI, calcMH, calcVerdict,
   calcPricePattern, analyzeCurve, runStress, calcHandoff,
@@ -215,7 +215,9 @@ function AutoRefreshBar({ nextPrice, nextFund, nextBS,
       })}
     </div>
   );
-}function TsBadge({ ts }) {
+}
+
+function TsBadge({ ts }) {
   const [age, setAge]         = useState('');
   const [mounted, setMounted] = useState(false);
 
@@ -402,7 +404,45 @@ function Gauge({ value }) {
       <text x={150} y={100} fill="var(--muted)" fontSize={8}>Tham</text>
     </svg>
   );
-}// ═══════════════════════════════════════════════════════════════
+}
+
+// ─── NEW: Wyckoff phase estimator ───────────────────────────────────────────
+// index.js gốc chưa tính wyckoff riêng — hàm nhẹ này suy ra phase từ
+// vị trí giá trong biên độ gần nhất + VSA + momentum, dùng làm input
+// cho VerdictProElite (prop `wyckoff`). Không phá vỡ logic cũ.
+function estimateWyckoff(priceChart, vsa, ew) {
+  const bars = priceChart || [];
+  if (bars.length < 5) {
+    return { phase:'B', label:'Phase B', sub:'Chưa đủ dữ liệu', confidence:50 };
+  }
+  const n    = bars.length;
+  const prices = bars.slice(-30).map(b => b.comex || 0);
+  const hi   = Math.max(...prices);
+  const lo   = Math.min(...prices);
+  const rng  = hi - lo || 0.001;
+  const cp   = bars[n-1].comex || 0;
+  const pos  = (cp - lo) / rng;
+  const mom  = n >= 10 ? (bars[n-1].comex||0) - (bars[n-10].comex||0) : 0;
+  const vsaScore = vsa?.score || 50;
+
+  let phase='B', label='Phase B', sub='Testing', confidence=55;
+  if (pos < 0.2 && vsaScore > 60) {
+    phase='C'; label='Phase C'; sub='Spring/Test of Support'; confidence=72;
+  } else if (pos < 0.3 && mom > 0) {
+    phase='C'; label='Phase C'; sub='Spring Confirmed'; confidence=75;
+  } else if (pos > 0.5 && mom > 0 && vsaScore > 60) {
+    phase='D'; label='Phase D'; sub='LPS → SOS Markup'; confidence=68;
+  } else if (pos > 0.7 && mom > 0) {
+    phase='E'; label='Phase E'; sub='Uptrend / Markup'; confidence=70;
+  } else if (pos > 0.8 && vsaScore < 45) {
+    phase='DIST'; label='Distribution'; sub='Potential Top'; confidence=60;
+  } else if (pos < 0.4) {
+    phase='A'; label='Phase A'; sub='SC → AR → ST'; confidence=58;
+  }
+  return { phase, label, sub, confidence };
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════
 export default function Home() {
@@ -726,17 +766,15 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
   const ez       = useMemo(()=>calcEZ(s.comex||6.07,s.sl||5.72,s.tp1||6.32,s.tp2||6.58,s.prev_high||6.12,s.prev_low||5.89,s.atr||0.12),[s.comex,s.sl,s.tp1,s.tp2,s.prev_high,s.prev_low,s.atr]);
   const sc       = useMemo(()=>calcSC(ew,vsa,stress,bias,s.comex||6.07,s.tp1||6.32,s.tp2||6.58,s.sl||5.72),[ew,vsa,stress,bias,s.comex,s.tp1,s.tp2,s.sl]);
   const plan     = useMemo(()=>buildPlan(s,ew,vsa,ti,mh,verdict,bias,stress,liq,ez,sc),[s,ew,vsa,ti,mh,verdict,bias,stress,liq,ez,sc]);
+
+  // ── NEW: Wyckoff phase — cần cho VerdictProElite ──────────────────────────
+  const wyckoff  = useMemo(()=>estimateWyckoff(s.priceChart,vsa,ew),[s.priceChart,vsa,ew]);
+
   const sigCol   = bias>=70?A.green:bias>=55?A.amber:A.red;
   const sigLabel = bias>=70?'🚀 LONG SETUP':bias>=55?'⏳ TRUNG LẬP':'🛑 KHÔNG GIAO DỊCH';
   const comexUp  = (s.comex_chg_pct||0)>=0;
   const rLabel   = regime==='risk_off'?'⚠️ RISK-OFF':regime==='stagflation'?'🌡️ STAGFLATION':'✅ RISK-ON';
   const rCol     = regime==='risk_off'?A.red:regime==='stagflation'?A.orange:A.green;
-
-  // TODO: Chưa có hàm tính Wyckoff phase trong lib/calculations.
-  // Tạm truyền null cho VerdictProElite; nếu bạn có calcWyckoff(),
-  // import và thay dòng dưới bằng:
-  // const wyckoff = useMemo(()=>calcWyckoff(s.priceChart, vsa, ew),[s.priceChart,vsa,ew]);
-  const wyckoff = null;
 
   // ─── RENDER ────────────────────────────────────────────────
   return (
@@ -978,7 +1016,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
         />
       )}
 
-      {/* ══ TAB 3: Verdict (VerdictProElite) ════════════════ */}
+      {/* ══ TAB 3: Verdict — VERDICT PRO ELITE ══════════════ */}
       {tab===3&&(
         <VerdictProElite
           s={s}
