@@ -8,6 +8,7 @@ import RadarChart        from '../components/RadarChart';
 import FundamentalsTab   from '../components/FundamentalsTab';
 import TrendTab          from '../components/TrendTab';
 import VerdictProElite   from '../components/VerdictProElite'; // ← NEW: Verdict Pro Elite
+import CommandCenterTab  from '../components/CommandCenterTab'; // ← NEW: Command Center (tab Tổng quan)
 import { useRadarData }  from '../hooks/useRadarData';
 import {
   A, calcVSA, calcElliott, calcTI, calcMH, calcVerdict,
@@ -627,15 +628,18 @@ Return ONLY raw JSON array: [{"name":"<str>","impact":"<high|medium|low>","curre
   }, [loadCal,aLog]);
 
   // ─── Fetch News ────────────────────────────────────────────
+  // ĐÃ SỬA BUG: /api/news.js thật trả về field `items`, không phải
+  // `news` — bản gốc kiểm tra `d.news?.length` nên luôn rỗng (không
+  // bao giờ hiển thị tin thật). Sửa lại đọc đúng `d.items`.
   const fetchNews = useCallback(async () => {
     if (loadNews) return;
     setLoadNews(true); aLog('📰 Tải tin tức...');
     try {
       const r = await fetch('/api/news');
       const d = await r.json();
-      if (d.news?.length) {
-        setNews(d.news);
-        aLog(`✅ Tin tức: ${d.news.length} bài`);
+      if (d.items?.length) {
+        setNews(d.items);
+        aLog(`✅ Tin tức: ${d.items.length} bài [${d.source}]`);
       } else aLog('⚠️ Không có tin tức');
     } catch(e) { aLog(`❌ ${e.message}`); }
     finally { setLoadNews(false); }
@@ -767,7 +771,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
   const sc       = useMemo(()=>calcSC(ew,vsa,stress,bias,s.comex||6.07,s.tp1||6.32,s.tp2||6.58,s.sl||5.72),[ew,vsa,stress,bias,s.comex,s.tp1,s.tp2,s.sl]);
   const plan     = useMemo(()=>buildPlan(s,ew,vsa,ti,mh,verdict,bias,stress,liq,ez,sc),[s,ew,vsa,ti,mh,verdict,bias,stress,liq,ez,sc]);
 
-  // ── NEW: Wyckoff phase — cần cho VerdictProElite ──────────────────────────
+  // ── Wyckoff phase — cần cho VerdictProElite ──────────────────────────
   const wyckoff  = useMemo(()=>estimateWyckoff(s.priceChart,vsa,ew),[s.priceChart,vsa,ew]);
 
   const sigCol   = bias>=70?A.green:bias>=55?A.amber:A.red;
@@ -857,138 +861,22 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
         ))}
       </div>
 
-      {/* ══ TAB 0: Tổng quan ══════════════════════════════════ */}
+      {/* ══ TAB 0: Tổng quan — COMMAND CENTER ═══════════════ */}
       {tab===0 && (
-        <div style={{ display:'grid', gap:10 }}>
-
-          <RadarChart
-            radarData={radarData} weights={weights}
-            verdict={verdict} bias={bias}
-            sigCol={sigCol} sigLabel={sigLabel} rLabel={rLabel}
-          />
-
-          <div style={{ display:'grid',
-            gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:10 }}>
-
-            <Card glow={verdict.verdictCol}>
-              <div style={{ fontSize:11, fontWeight:700, marginBottom:8 }}>
-                🏁 VERDICT
-              </div>
-              <div style={{ background:verdict.verdictCol+'18',
-                border:`2px solid ${verdict.verdictCol}55`,
-                borderRadius:10, padding:'12px',
-                textAlign:'center', marginBottom:8 }}>
-                <div style={{ fontSize:11, fontWeight:800,
-                  color:verdict.verdictCol }}>{verdict.verdictLabel}</div>
-                <div style={{ fontSize:36, fontWeight:800,
-                  color:verdict.verdictCol, lineHeight:1 }}>
-                  {verdict.final}
-                </div>
-                <div style={{ fontSize:8, color:'var(--muted)' }}>/100</div>
-              </div>
-              <ScoreBar label="PK1 — Kỹ thuật"
-                score={ti.pk1Score} col={ti.pk1Col} />
-              <ScoreBar label="PK2 — Nền tảng"
-                score={mh.pk2Score} col={mh.pk2Col} />
-              <ScoreBar label="Bias tổng hợp"
-                score={bias} col={sigCol} />
-              <div style={{ marginTop:8 }}>
-                <FetchBtn onClick={()=>doVerdict(verdict,ti,mh,bias)}
-                  loading={loadVerdict} label="🧠 AI Phân tích"
-                  icon="🧠" col={A.purple} />
-              </div>
-              {verdictText&&(
-                <div style={{ marginTop:8, background:A.purple+'08',
-                  borderRadius:8, padding:'10px', fontSize:10,
-                  color:'var(--text)', lineHeight:1.8,
-                  whiteSpace:'pre-line' }}>{verdictText}</div>
-              )}
-            </Card>
-
-            <Card>
-              <div style={{ fontSize:11, fontWeight:700, marginBottom:6 }}>
-                🧠 SỢ HÃI & THAM LAM
-              </div>
-              <div style={{ display:'flex', justifyContent:'center' }}>
-                <Gauge value={s.fear_greed||58} />
-              </div>
-              <div style={{ marginTop:10, borderTop:'1px solid var(--border)',
-                paddingTop:8 }}>
-                <div style={{ display:'flex', justifyContent:'space-between',
-                  alignItems:'center', marginBottom:6 }}>
-                  <div style={{ fontSize:11, fontWeight:700 }}>📰 TIN TỨC</div>
-                  <FetchBtn onClick={fetchNews} loading={loadNews}
-                    label="Cập nhật" icon="🔄" col={A.amber} small />
-                </div>
-                <NewsPanel news={news} loading={loadNews} onRefresh={fetchNews} />
-              </div>
-            </Card>
-          </div>
-
-          <Card glow={comexUp?A.green:A.red}>
-            <div style={{ display:'flex', justifyContent:'space-between',
-              alignItems:'center', marginBottom:8 }}>
-              <div style={{ fontSize:11, fontWeight:700,
-                display:'flex', alignItems:'center', gap:6 }}>
-                📈 COMEX PRICE CHART
-                <SourceBadge source={priceSource} />
-              </div>
-              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                <TsBadge ts={tsPrice} />
-                <FetchBtn onClick={fetchPrice} loading={loadPrice}
-                  label="Cập nhật" icon="🔄" col={A.cyan} small />
-              </div>
-            </div>
-            <ResponsiveContainer width="100%" height={200}>
-              <ComposedChart data={s.priceChart}>
-                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
-                <XAxis dataKey="d" tick={{fill:'var(--muted)',fontSize:9}} />
-                <YAxis yAxisId="p" domain={['auto','auto']}
-                  tick={{fill:'var(--muted)',fontSize:9}}
-                  tickFormatter={v=>`$${v.toFixed(2)}`} />
-                <YAxis yAxisId="v" orientation="right"
-                  tick={{fill:'var(--muted)',fontSize:8}}
-                  tickFormatter={v=>`${(v/1000).toFixed(0)}k`} />
-                <Tooltip content={<TT/>} />
-                <Bar yAxisId="v" dataKey="vol" name="Vol"
-                  fill={A.blue} opacity={0.2} />
-                <Line yAxisId="p" type="monotone" dataKey="comex" name="COMEX"
-                  stroke={comexUp?A.green:A.red} strokeWidth={2} dot={{r:3}} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </Card>
-
-          <Card glow={A.amber}>
-            <div style={{ display:'flex', justifyContent:'space-between',
-              alignItems:'center', marginBottom:8 }}>
-              <div style={{ fontSize:11, fontWeight:700 }}>📅 LỊCH KINH TẾ</div>
-              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-                <TsBadge ts={tsCal} />
-                <FetchBtn onClick={fetchCalendar} loading={loadCal}
-                  label="Cập nhật" icon="🔄" col={A.amber} small />
-              </div>
-            </div>
-            <EconCalendar events={s.calendarEvents||[]} />
-          </Card>
-
-          <Card>
-            <div style={{ fontSize:11, fontWeight:700, marginBottom:6 }}>
-              📋 ACTIVITY LOG
-            </div>
-            {log.slice(0,8).map((l,i)=>(
-              <div key={i} style={{ fontSize:9,
-                color:i===0?A.cyan:'var(--muted)',
-                padding:'2px 4px',
-                background:i===0?`${A.cyan}08`:'transparent',
-                borderRadius:3, marginBottom:2 }}>{l}</div>
-            ))}
-            {!log.length&&(
-              <div style={{ fontSize:9, color:'var(--muted)' }}>
-                Đang khởi động auto-refresh...
-              </div>
-            )}
-          </Card>
-        </div>
+        <CommandCenterTab
+          s={s}
+          ti={ti}
+          mh={mh}
+          verdict={verdict}
+          bias={bias}
+          sigLabel={sigLabel}
+          sigCol={sigCol}
+          weights={weights}
+          stress={stress}
+          news={news}
+          loadNews={loadNews}
+          fetchNews={fetchNews}
+        />
       )}
 
       {/* ══ TAB 1: Xu hướng & Mô hình (TrendTab) ════════════ */}
