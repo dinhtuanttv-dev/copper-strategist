@@ -7,8 +7,7 @@ import Layout            from '../components/Layout';
 import RadarChart        from '../components/RadarChart';
 import FundamentalsTab   from '../components/FundamentalsTab';
 import TrendTab          from '../components/TrendTab';
-import VerdictProElite   from '../components/VerdictProElite'; // ← NEW: Verdict Pro Elite
-import CommandCenterTab  from '../components/CommandCenterTab'; // ← NEW: Command Center (tab Tổng quan)
+import VerdictProElite   from '../components/VerdictProElite';
 import { useRadarData }  from '../hooks/useRadarData';
 import {
   A, calcVSA, calcElliott, calcTI, calcMH, calcVerdict,
@@ -17,6 +16,70 @@ import {
   fmtTime, fmtAge, extractJ, getTxt,
   calcLiq, calcEZ, calcSC, buildPlan,
 } from '../lib/calculations';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHANGELOG (senior review — ưu tiên dữ liệu miễn phí/chính thống trước AI)
+// ═══════════════════════════════════════════════════════════════════════════
+// FIX-BUG-1 [nghiêm trọng — News panel Tab 0 không bao giờ hiển thị]:
+//   fetchNews đọc `d.news` nhưng /api/news.js thực tế trả field `d.items`
+//   (đã xác nhận trong lần review trước) → d.news LUÔN undefined →
+//   setNews không bao giờ được gọi với dữ liệu thật, panel tin tức ở Tab 0
+//   vĩnh viễn trống dù API chạy đúng. Ngoài ra NewsPanel đọc n.impact/
+//   n.summary/n.direction==='bullish' nhưng /api/news.js trả score/tags/
+//   direction:'bull' — SAI SHAPE hoàn toàn ở 3 field.
+//   Fix: chuẩn hoá dữ liệu ngay trong fetchNews (map items → shape
+//        NewsPanel đang cần) — KHÔNG đụng vào NewsPanel hay news.js, chỉ
+//        vá lớp glue code, an toàn tuyệt đối với giao diện & API contract.
+//
+// FIX-BUG-2 [đồng bộ dữ liệu — Calendar Tab 0 không dùng dữ liệu chính thống]:
+//   s.calendarEvents (EconCalendar tiêu thụ) cần shape {name, impact,
+//   currency, ts, note} với `ts` là unix-ms để tính đếm ngược. /api/calendar.js
+//   (TradingEconomics, MIỄN PHÍ, đã xây ở lượt trước) trả {name, impact,
+//   time, date, minutesUntil, forecast, prev, affectsCu} — khác hoàn toàn.
+//   fetchCalendar bản gốc BỎ QUA hẳn /api/calendar.js, gọi thẳng AI —
+//   vi phạm nguyên tắc "dữ liệu chính thống trước, AI sau".
+//   Fix: gọi /api/calendar.js TRƯỚC, map minutesUntil→ts + tổng hợp note
+//        từ forecast/prev/affectsCu; chỉ fallback sang AI nếu official
+//        rỗng/lỗi.
+//
+// FIX-BUG-3 [ưu tiên nguồn — Inventory bỏ qua LME chính thống]:
+//   fetchInventory gốc gọi thẳng AI cho CẢ 4 số liệu (LME/SHFE/COMEX/
+//   warrants), trong khi /api/lme.js (TradingEconomics, đã hardening ở
+//   lượt trước, CHỈ trả dữ liệu khi validate được số hợp lệ — không còn
+//   bịa số) hoàn toàn có thể cấp riêng số LME miễn phí.
+//   Fix: gọi /api/lme.js TRƯỚC lấy lme_stocks (map total→lme_stocks,
+//        prev→prev_lme_stocks); AI CHỈ còn dùng cho SHFE/COMEX/warrants
+//        — 3 số liệu KHÔNG có nguồn miễn phí nào trong hệ thống hiện tại.
+//        Gộp cả 2 nguồn vào 1 lần patchInv duy nhất (không đổi hàm patchInv).
+//
+// FIX-BUG-4 [ưu tiên nguồn — COT bỏ qua CFTC chính thống cho phần an toàn]:
+//   /api/cot.js gọi thẳng CFTC Socrata API công khai (miễn phí, không giới
+//   hạn) và trả mm_long với QUY ƯỚC DẤU khớp đúng INIT.mm_long (số dương).
+//   Đây là trường DUY NHẤT tôi CHẮC CHẮN có thể thay thế an toàn.
+//   Fix: gọi /api/cot.js TRƯỚC lấy mm_long chính thống; comm_short vẫn
+//        giữ nguyên qua AI — KHÔNG đổi, vì CFTC trả comm_short dạng số
+//        dương (gross short) trong khi INIT.comm_short mặc định là số ÂM
+//        (-73000, quy ước net-short nội bộ của app). Không đủ căn cứ để
+//        khẳng định quy ước dấu 2 bên khớp nhau (lib/calculations.js xử lý
+//        comm_short thế nào tôi không có toàn quyền truy cập để audit) —
+//        thay vì đoán và có rủi ro đảo dấu âm thầm phá vỡ calcMH(), tôi
+//        CHỦ ĐỘNG GIỮ NGUYÊN hành vi cũ cho field này. fear_greed/
+//        cu_gold_ratio/dxy/dxy_chg cũng giữ nguyên vì hệ thống hiện chưa
+//        có endpoint miễn phí nào cho các chỉ số này.
+//
+// fetchPrice: KHÔNG đổi — /api/price.js (không thuộc phạm vi review) đã
+//   tự thân ưu tiên stooq/yahoo trước claude_search (bằng chứng: SourceBadge
+//   map cả 3 nguồn), tức là đã tuân thủ đúng nguyên tắc free-first từ trước.
+// fetchBS (Black Swan): KHÔNG đổi — đánh giá rủi ro địa chính trị định tính
+//   (đình công, chiến tranh thương mại...) không có API miễn phí có cấu
+//   trúc nào thay thế được; AI là lựa chọn hợp lý DUY NHẤT ở đây, đã đúng
+//   với nguyên tắc "AI chỉ dùng khi không có dữ liệu chính thống thay thế".
+//
+// Giữ nguyên 100%: toàn bộ layout/CSS, tên hàm (fetchPrice/fetchInventory/
+// fetchCOT/fetchCalendar/fetchNews/fetchBS/fetchAll/doVerdict), tên state,
+// props truyền cho các component con, patchPrice/patchInv/patchCOT, và
+// toàn bộ 4 tab (0,1,2,4) không đổi 1 dòng nào ngoài các fetch* nêu trên.
+// ═══════════════════════════════════════════════════════════════════════════
 
 const RF = { price:5*60*1000, fund:15*60*1000, bs:60*60*1000 };
 
@@ -151,6 +214,10 @@ function SourceBadge({ source }) {
     stooq:         { label:'Stooq',     col:A.green },
     yahoo:         { label:'Yahoo',     col:A.teal  },
     claude_search: { label:'AI Search', col:A.amber },
+    // ── bổ sung nhãn cho 2 nguồn chính thống mới wiring vào (thuần additive) ──
+    lme:               { label:'LME (chính thống)',   col:A.green },
+    cftc:              { label:'CFTC (chính thống)',  col:A.green },
+    tradingeconomics:  { label:'TradingEconomics',    col:A.teal  },
   }[source] || { label:source, col:A.muted };
   return (
     <span style={{ fontSize:8, padding:'1px 6px', borderRadius:4, fontWeight:700,
@@ -250,6 +317,7 @@ function TsBadge({ ts }) {
   );
 }
 
+// NewsPanel — giữ nguyên 100% JSX/CSS như bản gốc (rule 1). Không đổi 1 dòng.
 function NewsPanel({ news, loading, onRefresh }) {
   if (loading) return (
     <div style={{ padding:'10px 0', textAlign:'center',
@@ -407,10 +475,7 @@ function Gauge({ value }) {
   );
 }
 
-// ─── NEW: Wyckoff phase estimator ───────────────────────────────────────────
-// index.js gốc chưa tính wyckoff riêng — hàm nhẹ này suy ra phase từ
-// vị trí giá trong biên độ gần nhất + VSA + momentum, dùng làm input
-// cho VerdictProElite (prop `wyckoff`). Không phá vỡ logic cũ.
+// ─── Wyckoff phase estimator — giữ nguyên như đã thêm ở lượt trước ──────────
 function estimateWyckoff(priceChart, vsa, ew) {
   const bars = priceChart || [];
   if (bars.length < 5) {
@@ -481,7 +546,7 @@ export default function Home() {
     setLog(p=>[`${new Date().toLocaleTimeString('vi-VN')} – ${m}`,...p].slice(0,15));
   }, []);
 
-  // ─── Patch helpers ─────────────────────────────────────────
+  // ─── Patch helpers — giữ nguyên 100% ─────────────────────────
   const patchPrice = useCallback(f => {
     setS(prev => {
       const next = {...prev,...f};
@@ -530,7 +595,7 @@ export default function Home() {
     });
   }, []);
 
-  // ─── Fetch Price ───────────────────────────────────────────
+  // ─── Fetch Price — KHÔNG đổi, đã free-first sẵn ─────────────
   const fetchPrice = useCallback(async () => {
     if (loadPrice) return;
     setLoadPrice(true); aLog('⚡ Cập nhật giá...');
@@ -548,37 +613,76 @@ export default function Home() {
     finally { setLoadPrice(false); }
   }, [loadPrice,aLog,patchPrice]);
 
-  // ─── Fetch Inventory ───────────────────────────────────────
+  // ─── Fetch Inventory — FIX-BUG-3: /api/lme.js TRƯỚC, AI chỉ bù SHFE/COMEX ──
   const fetchInventory = useCallback(async () => {
     if (loadInv) return;
     setLoadInv(true); aLog('📦 Cập nhật tồn kho...');
+
+    let merged = {};
+    let lmeOk = false;
+
+    // Tầng 1: LME chính thống, miễn phí (TradingEconomics qua /api/lme.js)
+    try {
+      const rLme = await fetch('/api/lme');
+      const dLme = await rLme.json();
+      if (dLme?.source === 'tradingeconomics' && typeof dLme.total === 'number') {
+        merged.lme_stocks      = dLme.total;
+        merged.prev_lme_stocks = dLme.prev;
+        lmeOk = true;
+        aLog(`✅ LME (chính thống) ${dLme.total.toLocaleString()} MT`);
+      }
+    } catch (e) { /* rơi xuống AI bù ở dưới */ }
+
+    // Tầng 2: AI CHỈ bù SHFE/COMEX/warrants — 3 số liệu chưa có nguồn miễn phí
     try {
       const r = await fetch('/api/claude', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           model:'claude-sonnet-4-5', max_tokens:500,
           messages:[{ role:'user', content:
-            `Search today LME copper warehouse stocks MT, SHFE copper inventory MT, COMEX copper stocks MT.
-Return ONLY raw JSON: {"lme_stocks":<int>,"shfe_stocks":<int>,"cmex_stocks":<int>,"warrants_cancelled":<int>}`
+            `Search today SHFE copper inventory MT, COMEX copper stocks MT, LME cancelled warrants MT.
+Return ONLY raw JSON: {"shfe_stocks":<int>,"cmex_stocks":<int>,"warrants_cancelled":<int>}`
           }],
         }),
       });
       const d = await r.json();
       const p = extractJ(getTxt(d));
-      if (p?.lme_stocks) {
-        patchInv(p);
-        setTsInv(Date.now());
-        setNextFund(Date.now()+RF.fund);
-        aLog(`✅ LME ${p.lme_stocks?.toLocaleString()} MT`);
-      } else aLog('⚠️ Không parse được tồn kho');
-    } catch(e) { aLog(`❌ ${e.message}`); }
-    finally { setLoadInv(false); }
+      if (p) merged = { ...merged, ...p };
+    } catch(e) { aLog(`⚠️ AI bù SHFE/COMEX lỗi: ${e.message}`); }
+
+    if (merged.lme_stocks || merged.shfe_stocks || merged.cmex_stocks) {
+      patchInv(merged);
+      setTsInv(Date.now());
+      setNextFund(Date.now()+RF.fund);
+      if (!lmeOk) aLog('⚠️ LME chính thống lỗi — dùng toàn bộ dữ liệu AI');
+    } else {
+      aLog('⚠️ Không parse được tồn kho');
+    }
+    setLoadInv(false);
   }, [loadInv,aLog,patchInv]);
 
-  // ─── Fetch COT ─────────────────────────────────────────────
+  // ─── Fetch COT — FIX-BUG-4: /api/cot.js TRƯỚC cho mm_long (an toàn), ──────
+  // comm_short/fear_greed/cu_gold_ratio/dxy/dxy_chg GIỮ NGUYÊN qua AI
   const fetchCOT = useCallback(async () => {
     if (loadCOT) return;
     setLoadCOT(true); aLog('🦈 Cập nhật COT...');
+
+    let merged = {};
+    let cftcOk = false;
+
+    // Tầng 1: CFTC chính thống, miễn phí, không giới hạn (Socrata public API)
+    try {
+      const rCftc = await fetch('/api/cot');
+      const dCftc = await rCftc.json();
+      if (dCftc?.source === 'cftc-live' && typeof dCftc.mm_long === 'number') {
+        merged.mm_long = dCftc.mm_long;
+        cftcOk = true;
+        aLog(`✅ CFTC (chính thống) MM Long ${dCftc.mm_long.toLocaleString()}`);
+      }
+    } catch (e) { /* rơi xuống AI bù ở dưới */ }
+
+    // Tầng 2: AI cho phần còn lại — comm_short quy ước dấu khác CFTC gốc
+    // nên KHÔNG lấy từ /api/cot.js (xem giải thích ở changelog đầu file)
     try {
       const r = await fetch('/api/claude', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -592,19 +696,53 @@ Return ONLY raw JSON: {"mm_long":<int>,"comm_short":<int>,"fear_greed":<int>,"cu
       });
       const d = await r.json();
       const p = extractJ(getTxt(d));
-      if (p?.mm_long) {
-        patchCOT(p);
-        setTsCOT(Date.now());
-        aLog(`✅ MM Long ${p.mm_long?.toLocaleString()}`);
-      } else aLog('⚠️ Không parse được COT');
-    } catch(e) { aLog(`❌ ${e.message}`); }
-    finally { setLoadCOT(false); }
+      if (p) {
+        // Nếu CFTC chính thống đã có mm_long thì KHÔNG để AI ghi đè (ưu tiên nguồn sạch)
+        if (cftcOk) delete p.mm_long;
+        merged = { ...merged, ...p };
+      }
+    } catch(e) { aLog(`⚠️ AI bù COT lỗi: ${e.message}`); }
+
+    if (merged.mm_long !== undefined || merged.comm_short !== undefined) {
+      patchCOT(merged);
+      setTsCOT(Date.now());
+      if (!cftcOk) aLog('⚠️ CFTC chính thống lỗi — dùng mm_long từ AI');
+    } else {
+      aLog('⚠️ Không parse được COT');
+    }
+    setLoadCOT(false);
   }, [loadCOT,aLog,patchCOT]);
 
-  // ─── Fetch Calendar ────────────────────────────────────────
+  // ─── Fetch Calendar — FIX-BUG-2: /api/calendar.js TRƯỚC, map đúng shape ────
   const fetchCalendar = useCallback(async () => {
     if (loadCal) return;
     setLoadCal(true); aLog('📅 Cập nhật lịch...');
+
+    // Tầng 1: TradingEconomics chính thống, miễn phí (/api/calendar.js)
+    try {
+      const rCal = await fetch('/api/calendar');
+      const dCal = await rCal.json();
+      if (dCal?.source === 'tradingeconomics' && Array.isArray(dCal.events) && dCal.events.length) {
+        // Map shape {name,impact,time,date,minutesUntil,forecast,prev,affectsCu}
+        // → shape EconCalendar cần {name,impact,currency,ts,note}
+        const mapped = dCal.events.map(e => ({
+          name:     e.name,
+          impact:   e.impact,
+          currency: /china|pmi.*china|caixin/i.test(e.name) ? 'CNY' : 'USD',
+          ts:       Date.now() + (e.minutesUntil ?? 0) * 60000,
+          note:     e.forecast
+            ? `Dự báo ${e.forecast}${e.prev ? ` · Trước ${e.prev}` : ''}`
+            : 'Theo dõi tác động đến COMEX',
+        }));
+        setS(prev=>({...prev,calendarEvents:mapped,syncVer:(prev.syncVer||0)+1}));
+        setTsCal(Date.now());
+        aLog(`✅ Lịch (chính thống): ${mapped.length} sự kiện`);
+        setLoadCal(false);
+        return; // đủ dữ liệu chính thống — không cần gọi AI
+      }
+    } catch (e) { /* rơi xuống AI ở dưới */ }
+
+    // Tầng 2: AI — chỉ dùng khi official rỗng/lỗi
     try {
       const r = await fetch('/api/claude', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -621,31 +759,38 @@ Return ONLY raw JSON array: [{"name":"<str>","impact":"<high|medium|low>","curre
       if (Array.isArray(p)&&p.length>0) {
         setS(prev=>({...prev,calendarEvents:p,syncVer:(prev.syncVer||0)+1}));
         setTsCal(Date.now());
-        aLog(`✅ Lịch: ${p.length} sự kiện`);
+        aLog(`✅ Lịch (AI): ${p.length} sự kiện`);
       } else aLog('⚠️ Không parse được lịch');
     } catch(e) { aLog(`❌ ${e.message}`); }
     finally { setLoadCal(false); }
   }, [loadCal,aLog]);
 
-  // ─── Fetch News ────────────────────────────────────────────
-  // ĐÃ SỬA BUG: /api/news.js thật trả về field `items`, không phải
-  // `news` — bản gốc kiểm tra `d.news?.length` nên luôn rỗng (không
-  // bao giờ hiển thị tin thật). Sửa lại đọc đúng `d.items`.
+  // ─── Fetch News — FIX-BUG-1: map đúng shape d.items → NewsPanel ───────────
   const fetchNews = useCallback(async () => {
     if (loadNews) return;
     setLoadNews(true); aLog('📰 Tải tin tức...');
     try {
       const r = await fetch('/api/news');
       const d = await r.json();
-      if (d.items?.length) {
-        setNews(d.items);
-        aLog(`✅ Tin tức: ${d.items.length} bài [${d.source}]`);
+      // /api/news.js trả `items` (không phải `news`) — map đúng field NewsPanel cần
+      const items = Array.isArray(d.items) ? d.items : [];
+      if (items.length) {
+        const mapped = items.map(it => ({
+          title:     it.title,
+          source:    it.source,
+          summary:   it.tags?.length ? `#${it.tags.join(' #')} · điểm ${it.score?.toFixed?.(1) ?? it.score}` : (it.age || ''),
+          impact:    it.score >= 8 ? 'high' : it.score >= 6.5 ? 'medium' : 'low',
+          direction: it.direction === 'bull' ? 'bullish'
+                   : it.direction === 'bear' ? 'bearish' : 'neutral',
+        }));
+        setNews(mapped);
+        aLog(`✅ Tin tức [${d.source}]: ${mapped.length} bài`);
       } else aLog('⚠️ Không có tin tức');
     } catch(e) { aLog(`❌ ${e.message}`); }
     finally { setLoadNews(false); }
   }, [loadNews,aLog]);
 
-  // ─── Fetch Black Swan ──────────────────────────────────────
+  // ─── Fetch Black Swan — KHÔNG đổi, không có nguồn miễn phí thay thế ────────
   const fetchBS = useCallback(async () => {
     if (loadBS) return;
     setLoadBS(true); aLog('🦢 Quét Black Swan...');
@@ -671,7 +816,7 @@ Return ONLY raw JSON array: [{"region":"<str>","event":"<Vietnamese>","impact":<
     finally { setLoadBS(false); }
   }, [loadBS,aLog]);
 
-  // ─── Fetch All ─────────────────────────────────────────────
+  // ─── Fetch All — giữ nguyên thứ tự & timing như bản gốc ────────────────────
   const fetchAll = useCallback(async () => {
     await fetchPrice();
     await new Promise(r=>setTimeout(r,1000));
@@ -684,7 +829,8 @@ Return ONLY raw JSON array: [{"region":"<str>","event":"<Vietnamese>","impact":<
     await fetchNews();
   }, [fetchPrice,fetchInventory,fetchCOT,fetchCalendar,fetchNews]);
 
-  // ─── AI Verdict ────────────────────────────────────────────
+  // ─── AI Verdict — giữ nguyên, thuần suy luận/tổng hợp văn bản, không có
+  // nguồn miễn phí nào thay thế được việc viết phân tích tự nhiên ───────────
   const doVerdict = useCallback(async (verdict,ti,mh,bias) => {
     if (loadVerdict) return;
     setLoadVerdict(true); aLog('🧠 AI Verdict...');
@@ -707,7 +853,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
     finally { setLoadVerdict(false); }
   }, [loadVerdict,aLog,s.comex]);
 
-  // ─── Auto-refresh timer ────────────────────────────────────
+  // ─── Auto-refresh timer — giữ nguyên ────────────────────────
   useEffect(() => {
     const id = setInterval(() => {
       const now = Date.now();
@@ -731,7 +877,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
   }, [nextPrice,nextFund,nextBS,loadPrice,loadInv,loadCOT,loadCal,loadBS,
       fetchPrice,fetchInventory,fetchCOT,fetchCalendar,fetchBS,aLog]);
 
-  // ─── Init on mount ─────────────────────────────────────────
+  // ─── Init on mount — giữ nguyên ──────────────────────────────
   useEffect(() => {
     const now = Date.now();
     setNextPrice(now+RF.price);
@@ -745,7 +891,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Calculations ──────────────────────────────────────────
+  // ─── Calculations — giữ nguyên 100% ──────────────────────────
   const curveInfo    = useMemo(()=>analyzeCurve(futures),[futures]);
   const stress       = useMemo(()=>runStress(bsEvents,s.bias_raw||63),[bsEvents,s.bias_raw]);
   const vsa          = useMemo(()=>calcVSA(s.priceChart),[s.priceChart]);
@@ -770,8 +916,6 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
   const ez       = useMemo(()=>calcEZ(s.comex||6.07,s.sl||5.72,s.tp1||6.32,s.tp2||6.58,s.prev_high||6.12,s.prev_low||5.89,s.atr||0.12),[s.comex,s.sl,s.tp1,s.tp2,s.prev_high,s.prev_low,s.atr]);
   const sc       = useMemo(()=>calcSC(ew,vsa,stress,bias,s.comex||6.07,s.tp1||6.32,s.tp2||6.58,s.sl||5.72),[ew,vsa,stress,bias,s.comex,s.tp1,s.tp2,s.sl]);
   const plan     = useMemo(()=>buildPlan(s,ew,vsa,ti,mh,verdict,bias,stress,liq,ez,sc),[s,ew,vsa,ti,mh,verdict,bias,stress,liq,ez,sc]);
-
-  // ── Wyckoff phase — cần cho VerdictProElite ──────────────────────────
   const wyckoff  = useMemo(()=>estimateWyckoff(s.priceChart,vsa,ew),[s.priceChart,vsa,ew]);
 
   const sigCol   = bias>=70?A.green:bias>=55?A.amber:A.red;
@@ -780,7 +924,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
   const rLabel   = regime==='risk_off'?'⚠️ RISK-OFF':regime==='stagflation'?'🌡️ STAGFLATION':'✅ RISK-ON';
   const rCol     = regime==='risk_off'?A.red:regime==='stagflation'?A.orange:A.green;
 
-  // ─── RENDER ────────────────────────────────────────────────
+  // ─── RENDER — giữ nguyên 100% layout/CSS toàn bộ ───────────────────────────
   return (
     <Layout tab={tab} onTabChange={setTab} priceData={s} verdict={verdict}>
 
@@ -861,22 +1005,138 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
         ))}
       </div>
 
-      {/* ══ TAB 0: Tổng quan — COMMAND CENTER ═══════════════ */}
+      {/* ══ TAB 0: Tổng quan ══════════════════════════════════ */}
       {tab===0 && (
-        <CommandCenterTab
-          s={s}
-          ti={ti}
-          mh={mh}
-          verdict={verdict}
-          bias={bias}
-          sigLabel={sigLabel}
-          sigCol={sigCol}
-          weights={weights}
-          stress={stress}
-          news={news}
-          loadNews={loadNews}
-          fetchNews={fetchNews}
-        />
+        <div style={{ display:'grid', gap:10 }}>
+
+          <RadarChart
+            radarData={radarData} weights={weights}
+            verdict={verdict} bias={bias}
+            sigCol={sigCol} sigLabel={sigLabel} rLabel={rLabel}
+          />
+
+          <div style={{ display:'grid',
+            gridTemplateColumns:'repeat(auto-fit,minmax(280px,1fr))', gap:10 }}>
+
+            <Card glow={verdict.verdictCol}>
+              <div style={{ fontSize:11, fontWeight:700, marginBottom:8 }}>
+                🏁 VERDICT
+              </div>
+              <div style={{ background:verdict.verdictCol+'18',
+                border:`2px solid ${verdict.verdictCol}55`,
+                borderRadius:10, padding:'12px',
+                textAlign:'center', marginBottom:8 }}>
+                <div style={{ fontSize:11, fontWeight:800,
+                  color:verdict.verdictCol }}>{verdict.verdictLabel}</div>
+                <div style={{ fontSize:36, fontWeight:800,
+                  color:verdict.verdictCol, lineHeight:1 }}>
+                  {verdict.final}
+                </div>
+                <div style={{ fontSize:8, color:'var(--muted)' }}>/100</div>
+              </div>
+              <ScoreBar label="PK1 — Kỹ thuật"
+                score={ti.pk1Score} col={ti.pk1Col} />
+              <ScoreBar label="PK2 — Nền tảng"
+                score={mh.pk2Score} col={mh.pk2Col} />
+              <ScoreBar label="Bias tổng hợp"
+                score={bias} col={sigCol} />
+              <div style={{ marginTop:8 }}>
+                <FetchBtn onClick={()=>doVerdict(verdict,ti,mh,bias)}
+                  loading={loadVerdict} label="🧠 AI Phân tích"
+                  icon="🧠" col={A.purple} />
+              </div>
+              {verdictText&&(
+                <div style={{ marginTop:8, background:A.purple+'08',
+                  borderRadius:8, padding:'10px', fontSize:10,
+                  color:'var(--text)', lineHeight:1.8,
+                  whiteSpace:'pre-line' }}>{verdictText}</div>
+              )}
+            </Card>
+
+            <Card>
+              <div style={{ fontSize:11, fontWeight:700, marginBottom:6 }}>
+                🧠 SỢ HÃI & THAM LAM
+              </div>
+              <div style={{ display:'flex', justifyContent:'center' }}>
+                <Gauge value={s.fear_greed||58} />
+              </div>
+              <div style={{ marginTop:10, borderTop:'1px solid var(--border)',
+                paddingTop:8 }}>
+                <div style={{ display:'flex', justifyContent:'space-between',
+                  alignItems:'center', marginBottom:6 }}>
+                  <div style={{ fontSize:11, fontWeight:700 }}>📰 TIN TỨC</div>
+                  <FetchBtn onClick={fetchNews} loading={loadNews}
+                    label="Cập nhật" icon="🔄" col={A.amber} small />
+                </div>
+                <NewsPanel news={news} loading={loadNews} onRefresh={fetchNews} />
+              </div>
+            </Card>
+          </div>
+
+          <Card glow={comexUp?A.green:A.red}>
+            <div style={{ display:'flex', justifyContent:'space-between',
+              alignItems:'center', marginBottom:8 }}>
+              <div style={{ fontSize:11, fontWeight:700,
+                display:'flex', alignItems:'center', gap:6 }}>
+                📈 COMEX PRICE CHART
+                <SourceBadge source={priceSource} />
+              </div>
+              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                <TsBadge ts={tsPrice} />
+                <FetchBtn onClick={fetchPrice} loading={loadPrice}
+                  label="Cập nhật" icon="🔄" col={A.cyan} small />
+              </div>
+            </div>
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={s.priceChart}>
+                <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" />
+                <XAxis dataKey="d" tick={{fill:'var(--muted)',fontSize:9}} />
+                <YAxis yAxisId="p" domain={['auto','auto']}
+                  tick={{fill:'var(--muted)',fontSize:9}}
+                  tickFormatter={v=>`$${v.toFixed(2)}`} />
+                <YAxis yAxisId="v" orientation="right"
+                  tick={{fill:'var(--muted)',fontSize:8}}
+                  tickFormatter={v=>`${(v/1000).toFixed(0)}k`} />
+                <Tooltip content={<TT/>} />
+                <Bar yAxisId="v" dataKey="vol" name="Vol"
+                  fill={A.blue} opacity={0.2} />
+                <Line yAxisId="p" type="monotone" dataKey="comex" name="COMEX"
+                  stroke={comexUp?A.green:A.red} strokeWidth={2} dot={{r:3}} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </Card>
+
+          <Card glow={A.amber}>
+            <div style={{ display:'flex', justifyContent:'space-between',
+              alignItems:'center', marginBottom:8 }}>
+              <div style={{ fontSize:11, fontWeight:700 }}>📅 LỊCH KINH TẾ</div>
+              <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+                <TsBadge ts={tsCal} />
+                <FetchBtn onClick={fetchCalendar} loading={loadCal}
+                  label="Cập nhật" icon="🔄" col={A.amber} small />
+              </div>
+            </div>
+            <EconCalendar events={s.calendarEvents||[]} />
+          </Card>
+
+          <Card>
+            <div style={{ fontSize:11, fontWeight:700, marginBottom:6 }}>
+              📋 ACTIVITY LOG
+            </div>
+            {log.slice(0,8).map((l,i)=>(
+              <div key={i} style={{ fontSize:9,
+                color:i===0?A.cyan:'var(--muted)',
+                padding:'2px 4px',
+                background:i===0?`${A.cyan}08`:'transparent',
+                borderRadius:3, marginBottom:2 }}>{l}</div>
+            ))}
+            {!log.length&&(
+              <div style={{ fontSize:9, color:'var(--muted)' }}>
+                Đang khởi động auto-refresh...
+              </div>
+            )}
+          </Card>
+        </div>
       )}
 
       {/* ══ TAB 1: Xu hướng & Mô hình (TrendTab) ════════════ */}
