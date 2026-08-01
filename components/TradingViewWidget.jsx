@@ -3,15 +3,24 @@
  * ─────────────────────────────────────────────────────────────
  * Nhúng TradingView Advanced Chart widget — MIỄN PHÍ, chính thức,
  * không cần tài khoản. Đây CHỈ LÀ HIỂN THỊ — không có cách nào lấy
- * dữ liệu ra từ widget này để tính toán (xem giải thích đã trao đổi
- * trước đó về giới hạn của widget free).
+ * dữ liệu ra từ widget này để tính toán (đã giải thích trước đó).
  *
- * symbol mặc định COMEX:HG1! (Copper Futures) — đổi nếu bạn muốn
- * theo dõi mã khác.
+ * QUAN TRỌNG — ĐÃ SỬA: symbol mặc định KHÔNG dùng "COMEX:HG1!" nữa.
+ * Đó là hợp đồng tương lai CME/COMEX — CME bắt buộc người xem phải
+ * đăng nhập TradingView VÀ tự chấp nhận điều khoản dữ liệu thị trường
+ * của họ mới xem được. Khách vãng lai qua widget nhúng KHÔNG làm được
+ * bước chấp nhận đó → widget báo lỗi "Mã giao dịch này chỉ có trên
+ * TradingView" và hiện O0 H0 L0 C0 (không phải bug code, là giới hạn
+ * cấp phép dữ liệu CME).
+ *
+ * Dùng "OANDA:XCUUSD" (Copper CFD, broker OANDA cấp dữ liệu tự do
+ * cho mọi người xem qua widget, không cần đăng nhập/chấp nhận gì).
+ * Giá CFD bám sát giá COMEX (chênh lệch rất nhỏ, không đáng kể cho
+ * mục đích xem chart tham khảo).
  */
 import { useEffect, useRef } from 'react';
 
-export default function TradingViewWidget({ symbol = 'COMEX:HG1!', height = 400 }) {
+export default function TradingViewWidget({ symbol = 'OANDA:XCUUSD', height = 400 }) {
   const containerRef = useRef(null);
 
   useEffect(() => {

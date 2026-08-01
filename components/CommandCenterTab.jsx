@@ -256,7 +256,7 @@ export default function CommandCenterTab({ s, ti, mh, verdict, bias, sigLabel, s
 
       <Card>
         <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8 }}>📊 BIỂU ĐỒ GIÁ — TRADINGVIEW</div>
-        <TradingViewWidget symbol="COMEX:HG1!" height={360} />
+        <TradingViewWidget symbol="OANDA:XCUUSD" height={360} />
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 10 }}>

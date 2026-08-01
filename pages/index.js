@@ -873,6 +873,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
           sigCol={sigCol}
           weights={weights}
           stress={stress}
+          bsEvents={bsEvents}
           news={news}
           loadNews={loadNews}
           fetchNews={fetchNews}
