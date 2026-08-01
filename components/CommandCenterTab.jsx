@@ -15,8 +15,7 @@ import { useMarketVerdict } from '../hooks/useMarketVerdict';
 import { useSessionStats } from '../hooks/useSessionStats';
 import TradingViewWidget from './TradingViewWidget';
 import DecisionClock from './DecisionClock';
-
-function safeNum(v, fallback = 0) { return Number.isFinite(v) ? v : fallback; }
+import SessionHeatmap from './SessionHeatmap';
 
 function Card({ children, glow, style = {} }) {
   return (
@@ -149,55 +148,6 @@ const CycleRadar = memo(function CycleRadar({ sessionReturns, dataReady, distinc
   );
 });
 
-const SensitivityMatrix = memo(function SensitivityMatrix({ scenarios }) {
-  return (
-    <Card>
-      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 3 }}>⚗️ STRESS TEST KỊCH BẢN</div>
-      <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 8 }}>Minh hoạ — chưa chạy lại pipeline tính điểm thật</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {scenarios.map((sc, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--card2)', borderRadius: 8, padding: '8px 10px' }}>
-            <span style={{ fontSize: 11 }}>{sc.condition}</span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: sc.deltaScore >= 0 ? '#1D9E75' : '#E5484D' }}>{sc.deltaScore >= 0 ? '+' : ''}{sc.deltaScore}đ</span>
-          </div>
-        ))}
-      </div>
-    </Card>
-  );
-});
-
-const RiskSizer = memo(function RiskSizer({ comex, sl }) {
-  const [balance, setBalance] = useState(20000);
-  const riskPct = 0.015;
-  const riskDollar = balance * riskPct;
-  const slDistanceUsd = Math.abs(safeNum(comex, 6.1) - safeNum(sl, 5.72)) * 25000;
-  const contracts = Math.max(1, Math.round(riskDollar / (slDistanceUsd || 1)));
-  return (
-    <Card>
-      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10 }}>💰 QUẢN LÝ RỦI RO</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(90px,1fr))', gap: 8, marginBottom: 12 }}>
-        <Metric label="Rủi ro/lệnh" value={`${(riskPct * 100).toFixed(1)}%`} />
-        <Metric label="Khối lượng" value={`${contracts} HĐ`} />
-        <Metric label="Rủi ro $" value={`$${Math.round(riskDollar).toLocaleString()}`} color="#BA7517" />
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <label style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Vốn tài khoản</label>
-        <input type="range" min={1000} max={100000} step={500} value={balance} onChange={(e) => setBalance(Number(e.target.value))} style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, minWidth: 65, textAlign: 'right' }}>${balance.toLocaleString()}</span>
-      </div>
-    </Card>
-  );
-});
-
-function Metric({ label, value, color }) {
-  return (
-    <div style={{ background: 'var(--card2)', borderRadius: 8, padding: '8px 10px' }}>
-      <div style={{ fontSize: 8, color: 'var(--muted)' }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 800, color: color || 'inherit' }}>{value}</div>
-    </div>
-  );
-}
-
 const NewsFilter = memo(function NewsFilter({ news, loadNews, onRefresh }) {
   const allTags = useMemo(() => { const set = new Set(); (news || []).forEach((n) => (n.tags || []).forEach((t) => set.add(t))); return [...set]; }, [news]);
   const [active, setActive] = useState(new Set());
@@ -242,12 +192,6 @@ export default function CommandCenterTab({ s, ti, mh, verdict, bias, sigLabel, s
   });
   const sessionStats = useSessionStats();
 
-  const scenarios = useMemo(() => ([
-    { condition: 'DXY vượt 105', deltaScore: -15 },
-    { condition: 'Tồn kho LME giảm 5%', deltaScore: 10 },
-    { condition: 'FOMC diều hâu bất ngờ', deltaScore: -12 },
-  ]), []);
-
   return (
     <div style={{ display: 'grid', gap: 10 }}>
       <ActionBanner verdict={verdict} bias={bias} sigLabel={sigLabel} sigCol={sigCol}
@@ -272,13 +216,10 @@ export default function CommandCenterTab({ s, ti, mh, verdict, bias, sigLabel, s
           distinctDays={sessionStats.distinctDays}
           minDaysRequired={sessionStats.minDaysRequired}
         />
-        <DecisionClock />
+        <DecisionClock s={s} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 10 }}>
-        <SensitivityMatrix scenarios={scenarios} />
-        <RiskSizer comex={s?.comex} sl={s?.sl} />
-      </div>
+      <SessionHeatmap sessionByWeekday={sessionStats.sessionByWeekday} />
 
       <NewsFilter news={news} loadNews={loadNews} onRefresh={fetchNews} />
     </div>

@@ -38,6 +38,7 @@ export function useSessionStats() {
     minDaysRequired: data?.minDaysRequired ?? 7,
     sessionReturns: data?.sessionReturns ?? {},
     weekdayReturns: data?.weekdayReturns ?? {},
+    sessionByWeekday: data?.sessionByWeekday ?? {},
     loading,
   };
 }
