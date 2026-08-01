@@ -1,0 +1,35 @@
+# .github/workflows/collect-price-sample.yml
+# ─────────────────────────────────────────────────────────────
+# THAY THẾ Vercel Cron — vì gói Vercel Hobby (free) chỉ cho phép cron
+# chạy tối đa 1 lần/ngày, không đủ cho nhu cầu thu thập mẫu 20 phút/lần.
+# GitHub Actions scheduled workflow miễn phí và không có giới hạn này
+# (repo private: 2000 phút/tháng free — mỗi lần chạy job này chỉ mất
+# vài giây, dùng không đáng kể).
+#
+# THIẾT LẬP:
+#   1. Vào GitHub repo → Settings → Secrets and variables → Actions
+#   2. Thêm secret "CRON_SECRET" — giá trị PHẢI KHỚP với biến môi
+#      trường CRON_SECRET trên Vercel (Settings → Environment Variables)
+#   3. Thêm secret "APP_URL" — ví dụ https://copper-strategist.vercel.app
+#   4. Push file này lên nhánh main — GitHub tự động kích hoạt lịch chạy
+#
+# Lưu ý: GitHub Actions cron có thể trễ vài phút vào giờ cao điểm (đầu
+# giờ) — không đảm bảo chính xác tuyệt đối, nhưng đủ dùng cho mục đích
+# lấy mẫu thống kê (không cần chính xác tới từng phút).
+name: Thu thập mẫu giá đồng định kỳ
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'   # mỗi 20 phút — GitHub Actions dùng giờ UTC
+  workflow_dispatch:          # cho phép bấm chạy tay để test trong tab Actions
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gọi endpoint thu thập mẫu
+        run: |
+          curl -sf -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/collect-sample" \
+            || echo "Lần gọi này lỗi — không chặn workflow, sẽ tự thử lại ở lần kế tiếp"

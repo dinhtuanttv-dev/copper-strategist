@@ -1,252 +1,245 @@
 /**
- * components/CommandCenterTab.jsx
+ * components/CommandCenterTab.jsx (bản 3 — nối pipeline dữ liệu thật)
  * ─────────────────────────────────────────────────────────────
- * Tab "Tổng quan" mới. Component này KHÔNG tự fetch bất kỳ dữ liệu nào —
- * toàn bộ nhận qua props từ index.js, đúng 1 nguồn sự thật duy nhất với
- * các tab khác (TrendTab, FundamentalsTab, VerdictProElite).
+ * Props từ index.js: s, ti, mh, verdict, bias, sigLabel, sigCol,
+ * weights, stress, bsEvents, news, loadNews, fetchNews.
  *
- * Props cần truyền từ index.js (xem hướng dẫn tích hợp cuối file):
- *   s, ti, mh, verdict, bias, sigLabel, sigCol, weights, stress,
- *   news, loadNews, fetchNews
+ * Radar chu kỳ giá & Session Heatmap giờ đọc useSessionStats():
+ *   - dataReady=false (chưa đủ MIN_DAYS ngày dữ liệu) → hiện banner
+ *     "đang tích luỹ dữ liệu Xn/7 ngày", KHÔNG hiện số minh hoạ giả
+ *     (tránh lặp lại lỗi hiển thị số bịa như NaN trước đó).
+ *   - dataReady=true → hiện số thật từ sessionReturns/weekdayReturns.
  */
 import { memo, useMemo, useState, useCallback } from 'react';
 import { useMarketVerdict } from '../hooks/useMarketVerdict';
+import { useSessionStats } from '../hooks/useSessionStats';
+import TradingViewWidget from './TradingViewWidget';
 
-const COLORS = {
-  green: '#1D9E75', red: '#E5484D', amber: '#BA7517', blue: '#378ADD',
-  muted: 'var(--muted, #8B95A5)', card: 'var(--card, #131924)',
-  card2: 'var(--card2, #1a212e)', border: 'var(--border, #232b3a)',
-};
+function safeNum(v, fallback = 0) { return Number.isFinite(v) ? v : fallback; }
 
-// ── Action banner ────────────────────────────────────────────────────
+function Card({ children, glow, style = {} }) {
+  return (
+    <div style={{
+      background: 'var(--card)', border: `1px solid ${glow || 'var(--border)'}`,
+      borderRadius: 12, padding: '13px 15px',
+      boxShadow: glow ? `0 0 20px ${glow}15` : 'none', ...style,
+    }}>{children}</div>
+  );
+}
+
 const ActionBanner = memo(function ActionBanner({ verdict, bias, sigLabel, sigCol, setup }) {
   const [copied, setCopied] = useState(false);
+  const finalOk = Number.isFinite(verdict?.final);
+  const biasOk = Number.isFinite(bias);
 
   const handleCopy = useCallback(async () => {
     const text = [
       `COPPER SETUP — ${sigLabel}`,
-      `Verdict: ${verdict?.final ?? '—'}/100 · Bias: ${bias ?? '—'}/100`,
+      `Verdict: ${finalOk ? verdict.final : '—'}/100 · Bias: ${biasOk ? bias : '—'}/100`,
       `Entry: $${setup.comex?.toFixed?.(3) ?? '—'}`,
       `SL: $${setup.sl ?? '—'}  TP1: $${setup.tp1 ?? '—'}  TP2: $${setup.tp2 ?? '—'}`,
     ].join('\n');
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch { /* clipboard bị chặn trong 1 số môi trường — bỏ qua an toàn */ }
-  }, [verdict, bias, sigLabel, setup]);
+    try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1800); }
+    catch { /* bỏ qua nếu clipboard bị chặn */ }
+  }, [verdict, bias, sigLabel, setup, finalOk, biasOk]);
 
   return (
-    <div style={{
-      background: `${sigCol}18`, border: `2px solid ${sigCol}55`, borderRadius: 12,
-      padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
-    }}>
-      <div style={{ flex: 1, minWidth: 200 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: sigCol }}>{sigLabel}</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
-          <span style={{ fontSize: 26, fontWeight: 800, color: sigCol }}>{verdict?.final ?? '—'}</span>
-          <span style={{ fontSize: 12, color: COLORS.muted }}>/100 · Bias {bias ?? '—'}</span>
-          <div style={{ flex: 1, minWidth: 60, height: 7, background: '#00000030', borderRadius: 4, overflow: 'hidden' }}>
-            <div style={{ width: `${verdict?.final ?? 0}%`, height: '100%', background: sigCol }} />
+    <Card glow={sigCol}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: sigCol, marginBottom: 8 }}>{sigLabel}</div>
+          {!finalOk && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9, color: 'var(--red,#E5484D)', background: 'rgba(229,72,77,0.12)', borderRadius: 5, padding: '3px 8px', marginBottom: 6 }}>
+              ⚠️ Verdict đang lỗi tính toán (NaN) — xem tab Verdict
+            </div>
+          )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 32, fontWeight: 800, color: sigCol, lineHeight: 1 }}>{finalOk ? verdict.final : '—'}</span>
+            <span style={{ fontSize: 11, color: 'var(--muted)' }}>/100 · Bias {biasOk ? bias : '—'}</span>
+          </div>
+          <div style={{ background: 'var(--border)', borderRadius: 5, height: 8, overflow: 'hidden', marginTop: 6 }}>
+            <div style={{ width: `${finalOk ? Math.max(0, Math.min(100, verdict.final)) : 0}%`, height: '100%', background: sigCol }} />
           </div>
         </div>
+        <button onClick={handleCopy} style={{ background: `${sigCol}22`, border: `1px solid ${sigCol}`, color: sigCol, borderRadius: 7, padding: '8px 15px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          {copied ? '✅ Đã chép' : '📋 Chép setup lệnh'}
+        </button>
       </div>
-      <button
-        onClick={handleCopy}
-        style={{
-          background: sigCol, color: '#08111a', border: 'none', borderRadius: 8,
-          padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap',
-        }}
-      >
-        {copied ? 'Đã chép ✓' : '📋 Chép setup lệnh'}
-      </button>
-    </div>
+    </Card>
   );
 });
 
-// ── Driver breakdown ─────────────────────────────────────────────────
 const DriverBreakdown = memo(function DriverBreakdown({ drivers, summary }) {
   if (!drivers?.length) return null;
   return (
-    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
-      <div style={{ fontSize: 13, color: COLORS.muted, marginBottom: 8 }}>Phân rã động lực</div>
-      <div style={{ fontSize: 11, color: 'var(--text, inherit)', marginBottom: 10, lineHeight: 1.6 }}>{summary}</div>
+    <Card>
+      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6 }}>📊 PHÂN RÃ ĐỘNG LỰC</div>
+      <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.6 }}>{summary}</div>
       {drivers.map((d) => {
-        const barColor = d.contribution >= 0 ? COLORS.green : COLORS.red;
+        const bar = d.contribution >= 0 ? '#1D9E75' : '#E5484D';
         return (
           <div key={d.id} style={{ marginBottom: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
-              <span>{d.label}</span>
-              <span style={{ color: barColor, fontWeight: 700 }}>
-                {d.contribution >= 0 ? '+' : ''}{d.contribution}đ
-              </span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 3 }}>
+              <span style={{ color: 'var(--muted)' }}>{d.label}</span>
+              <span style={{ color: bar, fontWeight: 700 }}>{d.contribution >= 0 ? '+' : ''}{d.contribution}đ</span>
             </div>
-            <div style={{ height: 6, background: '#00000030', borderRadius: 3 }}>
-              <div style={{
-                width: `${Math.min(100, Math.abs(d.contribution) * 4)}%`,
-                height: '100%', background: barColor, borderRadius: 3,
-              }} />
+            <div style={{ background: 'var(--border)', borderRadius: 5, height: 6, overflow: 'hidden' }}>
+              <div style={{ width: `${Math.min(100, Math.abs(d.contribution) * 4)}%`, height: '100%', background: bar }} />
             </div>
           </div>
         );
       })}
-    </div>
+    </Card>
   );
 });
 
-// ── Stress test kịch bản (minh hoạ — xem ghi chú cuối file) ─────────
+const BlackSwanTimeline = memo(function BlackSwanTimeline({ bsEvents }) {
+  const sorted = useMemo(() => [...(bsEvents || [])].sort((a, b) => (b.impact || 0) - (a.impact || 0)), [bsEvents]);
+  return (
+    <Card glow="#BA7517">
+      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8 }}>🦢 BLACK SWAN</div>
+      {!sorted.length && <div style={{ fontSize: 10, color: 'var(--muted)' }}>Chưa có dữ liệu.</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {sorted.map((e, i) => {
+          const col = e.col || (e.impact > 70 ? '#E5484D' : e.impact > 50 ? '#FF8C42' : '#BA7517');
+          return (
+            <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: `${col}12`, border: `1px solid ${col}33`, borderRadius: 8, padding: '7px 10px' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: col }}>{e.region}</div>
+                <div style={{ fontSize: 10, color: 'var(--muted)' }}>{e.event}</div>
+              </div>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: col }}>{e.impact}</div>
+                <div style={{ fontSize: 8, color: 'var(--muted)', textTransform: 'uppercase' }}>{e.bsType}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Card>
+  );
+});
+
+const SESSION_LABELS = { asia: 'Châu Á', london: 'London', new_york: 'New York', overlap: 'L-NY overlap' };
+
+// ── Radar chu kỳ giá — dùng dữ liệu thật khi dataReady, fallback rõ nhãn khi chưa đủ ──
+const CycleRadar = memo(function CycleRadar({ sessionReturns, dataReady, distinctDays, minDaysRequired }) {
+  if (!dataReady) {
+    return (
+      <Card>
+        <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 6 }}>📈 CHU KỲ GIÁ THEO PHIÊN</div>
+        <div style={{ fontSize: 11, color: 'var(--amber,#BA7517)', background: 'rgba(186,117,23,0.12)', borderRadius: 6, padding: '8px 10px' }}>
+          ⏳ Đang tích luỹ dữ liệu: {distinctDays}/{minDaysRequired} ngày. Radar sẽ hiện số thật khi đủ dữ liệu.
+        </div>
+      </Card>
+    );
+  }
+  const entries = Object.entries(sessionReturns);
+  return (
+    <Card>
+      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8 }}>📈 CHU KỲ GIÁ THEO PHIÊN (dữ liệu thật, {distinctDays} ngày)</div>
+      {entries.map(([session, ret]) => (
+        <div key={session} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
+          <span>{SESSION_LABELS[session] || session}</span>
+          <span style={{ color: ret >= 0 ? '#1D9E75' : '#E5484D', fontWeight: 700 }}>{ret >= 0 ? '+' : ''}{ret.toFixed(2)}%</span>
+        </div>
+      ))}
+    </Card>
+  );
+});
+
 const SensitivityMatrix = memo(function SensitivityMatrix({ scenarios }) {
   return (
-    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
-      <div style={{ fontSize: 13, color: COLORS.muted, marginBottom: 4 }}>Stress test kịch bản</div>
-      <div style={{ fontSize: 10, color: COLORS.muted, marginBottom: 8 }}>Minh hoạ — chưa chạy lại pipeline tính điểm thật</div>
+    <Card>
+      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 3 }}>⚗️ STRESS TEST KỊCH BẢN</div>
+      <div style={{ fontSize: 9, color: 'var(--muted)', marginBottom: 8 }}>Minh hoạ — chưa chạy lại pipeline tính điểm thật</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {scenarios.map((sc, i) => (
-          <div key={i} style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            background: '#00000020', borderRadius: 8, padding: '8px 10px',
-          }}>
-            <span style={{ fontSize: 12 }}>{sc.condition}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: sc.deltaScore >= 0 ? COLORS.green : COLORS.red }}>
-              {sc.deltaScore >= 0 ? '+' : ''}{sc.deltaScore}đ
-            </span>
+          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--card2)', borderRadius: 8, padding: '8px 10px' }}>
+            <span style={{ fontSize: 11 }}>{sc.condition}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: sc.deltaScore >= 0 ? '#1D9E75' : '#E5484D' }}>{sc.deltaScore >= 0 ? '+' : ''}{sc.deltaScore}đ</span>
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 });
 
-// ── Risk sizer — dùng SL/TP thật từ state s ──────────────────────────
 const RiskSizer = memo(function RiskSizer({ comex, sl }) {
   const [balance, setBalance] = useState(20000);
   const riskPct = 0.015;
   const riskDollar = balance * riskPct;
-  const slDistanceUsd = Math.abs((comex ?? 6.1) - (sl ?? 5.72)) * 25000; // 25,000 lb/hợp đồng COMEX
+  const slDistanceUsd = Math.abs(safeNum(comex, 6.1) - safeNum(sl, 5.72)) * 25000;
   const contracts = Math.max(1, Math.round(riskDollar / (slDistanceUsd || 1)));
-
   return (
-    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
-      <div style={{ fontSize: 13, color: COLORS.muted, marginBottom: 10 }}>Quản lý rủi ro & kích thước vị thế</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(100px,1fr))', gap: 8, marginBottom: 12 }}>
+    <Card>
+      <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 10 }}>💰 QUẢN LÝ RỦI RO</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(90px,1fr))', gap: 8, marginBottom: 12 }}>
         <Metric label="Rủi ro/lệnh" value={`${(riskPct * 100).toFixed(1)}%`} />
         <Metric label="Khối lượng" value={`${contracts} HĐ`} />
-        <Metric label="Rủi ro $" value={`$${Math.round(riskDollar).toLocaleString()}`} color={COLORS.amber} />
+        <Metric label="Rủi ro $" value={`$${Math.round(riskDollar).toLocaleString()}`} color="#BA7517" />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-        <label style={{ fontSize: 12, color: COLORS.muted, whiteSpace: 'nowrap' }}>Vốn tài khoản</label>
-        <input
-          type="range" min={1000} max={100000} step={500} value={balance}
-          onChange={(e) => setBalance(Number(e.target.value))}
-          style={{ flex: 1 }}
-        />
-        <span style={{ fontSize: 12, minWidth: 70, textAlign: 'right' }}>${balance.toLocaleString()}</span>
+        <label style={{ fontSize: 10, color: 'var(--muted)', whiteSpace: 'nowrap' }}>Vốn tài khoản</label>
+        <input type="range" min={1000} max={100000} step={500} value={balance} onChange={(e) => setBalance(Number(e.target.value))} style={{ flex: 1 }} />
+        <span style={{ fontSize: 11, minWidth: 65, textAlign: 'right' }}>${balance.toLocaleString()}</span>
       </div>
-    </div>
+    </Card>
   );
 });
 
 function Metric({ label, value, color }) {
   return (
-    <div style={{ background: '#00000020', borderRadius: 8, padding: '8px 10px' }}>
-      <div style={{ fontSize: 11, color: COLORS.muted }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: color || 'inherit' }}>{value}</div>
+    <div style={{ background: 'var(--card2)', borderRadius: 8, padding: '8px 10px' }}>
+      <div style={{ fontSize: 8, color: 'var(--muted)' }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 800, color: color || 'inherit' }}>{value}</div>
     </div>
   );
 }
 
-// ── News filter — khớp đúng shape thật của /api/news.js ──────────────
-// item: { score, title, source, age, tags:['Supply','Urgent',...], direction:'bull'|'bear'|'neutral' }
 const NewsFilter = memo(function NewsFilter({ news, loadNews, onRefresh }) {
-  const allTags = useMemo(() => {
-    const set = new Set();
-    (news || []).forEach((n) => (n.tags || []).forEach((t) => set.add(t)));
-    return [...set];
-  }, [news]);
-
+  const allTags = useMemo(() => { const set = new Set(); (news || []).forEach((n) => (n.tags || []).forEach((t) => set.add(t))); return [...set]; }, [news]);
   const [active, setActive] = useState(new Set());
-
-  const toggle = useCallback((tag) => {
-    setActive((prev) => {
-      const next = new Set(prev);
-      next.has(tag) ? next.delete(tag) : next.add(tag);
-      return next;
-    });
-  }, []);
-
-  const filtered = useMemo(() => {
-    if (active.size === 0) return news || [];
-    return (news || []).filter((n) => n.tags?.some((t) => active.has(t)));
-  }, [news, active]);
-
-  const dirColor = (d) => (d === 'bull' ? COLORS.green : d === 'bear' ? COLORS.red : COLORS.amber);
-
+  const toggle = useCallback((tag) => { setActive((prev) => { const next = new Set(prev); next.has(tag) ? next.delete(tag) : next.add(tag); return next; }); }, []);
+  const filtered = useMemo(() => { if (active.size === 0) return news || []; return (news || []).filter((n) => n.tags?.some((t) => active.has(t))); }, [news, active]);
+  const dirColor = (d) => (d === 'bull' ? '#1D9E75' : d === 'bear' ? '#E5484D' : '#BA7517');
   return (
-    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 12, padding: 16 }}>
+    <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-        <div style={{ fontSize: 13, color: COLORS.muted }}>Smart news filter</div>
-        <button onClick={onRefresh} disabled={loadNews} style={{
-          fontSize: 10, padding: '3px 10px', borderRadius: 6, border: `1px solid ${COLORS.border}`,
-          background: 'transparent', color: COLORS.muted, cursor: loadNews ? 'default' : 'pointer',
-        }}>
+        <div style={{ fontSize: 11, fontWeight: 700 }}>📰 SMART NEWS FILTER</div>
+        <button onClick={onRefresh} disabled={loadNews} style={{ fontSize: 9, padding: '4px 10px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--muted)', cursor: loadNews ? 'default' : 'pointer' }}>
           {loadNews ? '⟳ đang tải...' : '🔄 Cập nhật'}
         </button>
       </div>
-
       {allTags.length > 0 && (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
           {allTags.map((t) => (
-            <button
-              key={t}
-              onClick={() => toggle(t)}
-              style={{
-                fontSize: 11, padding: '4px 12px', borderRadius: 999,
-                border: `1px solid ${COLORS.border}`, cursor: 'pointer',
-                background: active.has(t) ? `${COLORS.blue}33` : 'transparent',
-                color: active.has(t) ? COLORS.blue : COLORS.muted,
-              }}
-            >
-              {t}
-            </button>
+            <button key={t} onClick={() => toggle(t)} style={{ fontSize: 10, padding: '3px 10px', borderRadius: 999, border: '1px solid var(--border)', cursor: 'pointer', background: active.has(t) ? '#378ADD33' : 'transparent', color: active.has(t) ? '#378ADD' : 'var(--muted)' }}>{t}</button>
           ))}
         </div>
       )}
-
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
-        {!filtered.length && (
-          <div style={{ fontSize: 12, color: COLORS.muted }}>
-            {news?.length ? 'Không có tin phù hợp bộ lọc.' : 'Chưa có tin — bấm Cập nhật.'}
-          </div>
-        )}
+        {!filtered.length && <div style={{ fontSize: 10, color: 'var(--muted)' }}>{news?.length ? 'Không có tin phù hợp bộ lọc.' : 'Chưa có tin — bấm Cập nhật.'}</div>}
         {filtered.map((n, i) => (
-          <div key={i} style={{ fontSize: 12, background: '#00000020', borderRadius: 8, padding: '8px 10px' }}>
+          <div key={i} style={{ fontSize: 11, background: 'var(--card2)', borderRadius: 8, padding: '7px 10px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
               <span style={{ flex: 1 }}>{n.title}</span>
-              <span style={{ color: dirColor(n.direction), fontWeight: 700, flexShrink: 0 }}>
-                {n.direction === 'bull' ? '🟢' : n.direction === 'bear' ? '🔴' : '🟡'}
-              </span>
+              <span style={{ color: dirColor(n.direction), flexShrink: 0 }}>{n.direction === 'bull' ? '🟢' : n.direction === 'bear' ? '🔴' : '🟡'}</span>
             </div>
-            <div style={{ fontSize: 10, color: COLORS.muted }}>{n.source} · {n.age}</div>
+            <div style={{ fontSize: 9, color: 'var(--muted)' }}>{n.source} · {n.age}</div>
           </div>
         ))}
       </div>
-    </div>
+    </Card>
   );
 });
 
-// ── Main component ──────────────────────────────────────────────────
-export default function CommandCenterTab({
-  s, ti, mh, verdict, bias, sigLabel, sigCol, weights, stress,
-  news, loadNews, fetchNews,
-}) {
+export default function CommandCenterTab({ s, ti, mh, verdict, bias, sigLabel, sigCol, weights, stress, bsEvents, news, loadNews, fetchNews }) {
   const { drivers, summary, confidence } = useMarketVerdict({
-    pk1Score: ti?.pk1Score,
-    pk2Score: mh?.pk2Score,
-    dxyChg: s?.dxy_chg,
-    fearGreed: s?.fear_greed,
-    blackSwanRisk: stress?.bsRisk,
-    weights,
+    pk1Score: ti?.pk1Score, pk2Score: mh?.pk2Score, dxyChg: s?.dxy_chg,
+    fearGreed: s?.fear_greed, blackSwanRisk: stress?.bsRisk, weights,
   });
+  const sessionStats = useSessionStats();
 
   const scenarios = useMemo(() => ([
     { condition: 'DXY vượt 105', deltaScore: -15 },
@@ -255,20 +248,33 @@ export default function CommandCenterTab({
   ]), []);
 
   return (
-    <div style={{ display: 'grid', gap: 14 }}>
-      <ActionBanner
-        verdict={verdict} bias={bias} sigLabel={sigLabel} sigCol={sigCol}
-        setup={{ comex: s?.comex, sl: s?.sl, tp1: s?.tp1, tp2: s?.tp2 }}
-      />
+    <div style={{ display: 'grid', gap: 10 }}>
+      <ActionBanner verdict={verdict} bias={bias} sigLabel={sigLabel} sigCol={sigCol}
+        setup={{ comex: s?.comex, sl: s?.sl, tp1: s?.tp1, tp2: s?.tp2 }} />
 
-      <div style={{ fontSize: 10, color: COLORS.muted }}>Độ tin cậy phân rã: {confidence}</div>
+      <div style={{ fontSize: 9, color: 'var(--muted)' }}>Độ tin cậy phân rã: {confidence}</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 14 }}>
+      <Card>
+        <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 8 }}>📊 BIỂU ĐỒ GIÁ — TRADINGVIEW</div>
+        <TradingViewWidget symbol="COMEX:HG1!" height={360} />
+      </Card>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 10 }}>
         <DriverBreakdown drivers={drivers} summary={summary} />
+        <BlackSwanTimeline bsEvents={bsEvents} />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 10 }}>
+        <CycleRadar
+          sessionReturns={sessionStats.sessionReturns}
+          dataReady={sessionStats.dataReady}
+          distinctDays={sessionStats.distinctDays}
+          minDaysRequired={sessionStats.minDaysRequired}
+        />
         <SensitivityMatrix scenarios={scenarios} />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 10 }}>
         <RiskSizer comex={s?.comex} sl={s?.sl} />
         <NewsFilter news={news} loadNews={loadNews} onRefresh={fetchNews} />
       </div>
