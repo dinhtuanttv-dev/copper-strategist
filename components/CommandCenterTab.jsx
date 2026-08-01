@@ -14,6 +14,7 @@ import { memo, useMemo, useState, useCallback } from 'react';
 import { useMarketVerdict } from '../hooks/useMarketVerdict';
 import { useSessionStats } from '../hooks/useSessionStats';
 import TradingViewWidget from './TradingViewWidget';
+import DecisionClock from './DecisionClock';
 
 function safeNum(v, fallback = 0) { return Number.isFinite(v) ? v : fallback; }
 
@@ -271,13 +272,15 @@ export default function CommandCenterTab({ s, ti, mh, verdict, bias, sigLabel, s
           distinctDays={sessionStats.distinctDays}
           minDaysRequired={sessionStats.minDaysRequired}
         />
-        <SensitivityMatrix scenarios={scenarios} />
+        <DecisionClock />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 10 }}>
+        <SensitivityMatrix scenarios={scenarios} />
         <RiskSizer comex={s?.comex} sl={s?.sl} />
-        <NewsFilter news={news} loadNews={loadNews} onRefresh={fetchNews} />
       </div>
+
+      <NewsFilter news={news} loadNews={loadNews} onRefresh={fetchNews} />
     </div>
   );
 }

@@ -760,12 +760,33 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
   const weights      = useMemo(()=>getWeights(regime),[regime]);
   const { radarData, wRaw } = useRadarData(s, weights);
   const pciA    = pci>65?3:pci>45?0:-5;
-  const bias    = useMemo(()=>Math.max(0,Math.min(100,
-    wRaw+pciA+cgI.adj+handoff.score+curveInfo.biasAdj
-    -Math.round((stress.bsRisk||0)*0.15)
-    -((s.fear_greed||58)>80?10:0)
-  )),[wRaw,pciA,cgI.adj,handoff.score,curveInfo.biasAdj,stress.bsRisk,s.fear_greed]);
-  const verdict  = useMemo(()=>calcVerdict(ti.pk1Score,mh.pk2Score,bias,stress),[ti,mh,bias,stress]);
+
+  // ─── GUARD NaN (bản vá toàn diện) ──────────────────────────────────
+  // Không sửa được bên trong useRadarData/interpCG/calcHandoff/analyzeCurve
+  // (chưa có source các hàm đó), nên chặn NaN ngay tại đây: mỗi số hạng
+  // được kiểm tra Number.isFinite TRƯỚC khi cộng — 1 số hạng lỗi không
+  // còn làm hỏng toàn bộ phép cộng (trước đây NaN + số bất kỳ = NaN,
+  // lan truyền ra verdict.final khiến UI hiện "NaN/100").
+  const safeN = (v, fb = 0) => (Number.isFinite(v) ? v : fb);
+
+  const bias    = useMemo(()=>{
+    const raw = safeN(wRaw,50) + safeN(pciA,0) + safeN(cgI?.adj,0)
+      + safeN(handoff?.score,0) + safeN(curveInfo?.biasAdj,0)
+      - Math.round(safeN(stress?.bsRisk,0)*0.15)
+      - (safeN(s.fear_greed,58)>80?10:0);
+    return Math.max(0,Math.min(100, safeN(raw,50)));
+  },[wRaw,pciA,cgI,handoff,curveInfo,stress,s.fear_greed]);
+
+  const verdict  = useMemo(()=>{
+    const raw = calcVerdict(ti.pk1Score,mh.pk2Score,bias,stress);
+    // bias đã được đảm bảo hữu hạn ở trên; nếu calcVerdict vẫn trả NaN
+    // (bug nằm sâu bên trong hàm đó), fallback về 50/Trung lập thay vì
+    // để "NaN" lọt ra UI — không che giấu bug, chỉ ngăn hiển thị sai.
+    if (!Number.isFinite(raw?.final)) {
+      return { ...raw, final: 50, verdictLabel: raw?.verdictLabel || 'Trung lập (verdict lỗi tính toán)', verdictCol: raw?.verdictCol || A.amber };
+    }
+    return raw;
+  },[ti,mh,bias,stress]);
   const liq      = useMemo(()=>calcLiq(s.comex||6.07,s.prev_high||6.12,s.prev_low||5.89,s.session_vol||91000,s.avg_vol||105000),[s.comex,s.prev_high,s.prev_low,s.session_vol,s.avg_vol]);
   const ez       = useMemo(()=>calcEZ(s.comex||6.07,s.sl||5.72,s.tp1||6.32,s.tp2||6.58,s.prev_high||6.12,s.prev_low||5.89,s.atr||0.12),[s.comex,s.sl,s.tp1,s.tp2,s.prev_high,s.prev_low,s.atr]);
   const sc       = useMemo(()=>calcSC(ew,vsa,stress,bias,s.comex||6.07,s.tp1||6.32,s.tp2||6.58,s.sl||5.72),[ew,vsa,stress,bias,s.comex,s.tp1,s.tp2,s.sl]);
