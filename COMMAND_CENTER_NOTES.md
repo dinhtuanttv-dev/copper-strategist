@@ -91,3 +91,19 @@ import CommandCenterTab from '../components/CommandCenterTab';
   được dữ liệu ra tính toán — nếu sau này muốn TradingView cung cấp dữ
   liệu thật cho tính toán riêng, cần xem xét gói Charting Library trả
   phí + datafeed riêng, ngoài phạm vi bản miễn phí này.
+
+## 8. Trap Zone Widget (bản v8)
+
+File mới: `pages/api/trap-zone.js`, `hooks/useTrapZone.js`, `components/TrapZoneWidget.jsx`.
+KHÔNG cần biến môi trường mới — dùng lại đúng Upstash Redis đã cấu hình.
+
+Đã lược bỏ khỏi ý tưởng ban đầu (không khả thi/không trung thực):
+- "Độ chính xác mô hình %" — bịa, không đưa vào.
+- Tự động vẽ hộp lên TradingView — không thể làm với widget free, thay
+  bằng nút mở TradingView thật ở tab mới (`window.open`).
+- Phát hiện bóng nến 15 phút — cần dữ liệu OHLC intraday chưa thu thập.
+- Volume Health — cần dữ liệu volume chưa thu thập.
+
+Nếu sau này muốn 2 mục cuối hoạt động thật, cần sửa
+`pages/api/cron/collect-sample.js` để lưu thêm OHLC/volume mỗi lần
+thu thập (hiện chỉ lưu 1 điểm giá `comex`), rồi đợi vài tuần tích luỹ.

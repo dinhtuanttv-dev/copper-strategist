@@ -16,6 +16,7 @@ import { useSessionStats } from '../hooks/useSessionStats';
 import TradingViewWidget from './TradingViewWidget';
 import DecisionClock from './DecisionClock';
 import SessionHeatmap from './SessionHeatmap';
+import TrapZoneWidget from './TrapZoneWidget';
 
 function Card({ children, glow, style = {} }) {
   return (
@@ -218,6 +219,8 @@ export default function CommandCenterTab({ s, ti, mh, verdict, bias, sigLabel, s
         />
         <DecisionClock s={s} />
       </div>
+
+      <TrapZoneWidget />
 
       <SessionHeatmap sessionByWeekday={sessionStats.sessionByWeekday} />
 
