@@ -1,62 +1,19 @@
 // pages/api/news.js — Copper news aggregator
-// Nguồn miễn phí: RSS công khai (mining.com, kitco, reuters, investing.com) + NLP scoring
-//
-// ═══ CHANGELOG (senior review) ═══════════════════════════════════════════════
-// FIX-1 [đồng bộ dữ liệu giữa các tab — quan trọng nhất]:
-//   File gốc tự định nghĩa scoreArticle() riêng (server), trong khi
-//   useVerdictEngine.js lại gọi scoreNewsRelevance() từ lib/verdictCalculations.js
-//   (client) để TÍNH LẠI score/tags và GHI ĐÈ lên kết quả server trả về:
-//     items.map(item => ({ ...item, ...scoreNewsRelevance(item.title) }))
-//   → 2 thuật toán khác công thức chạy trên CÙNG 1 bài báo, số điểm server
-//     lọc top-8 không phải số điểm cuối cùng hiển thị cho user — lãng phí
-//     tính toán và có thể lọc nhầm (bài đáng lẽ điểm cao ở client bị loại
-//     sớm vì điểm thấp ở server, hoặc ngược lại).
-//   Fix: import CHUNG scoreNewsRelevance() từ lib/verdictCalculations.js —
-//        một nguồn tính điểm duy nhất dùng cả server lẫn client (DRY).
-//        Không đổi tên field trả về (`score`, `tags` vẫn giữ nguyên) nên
-//        useVerdictEngine.js không cần sửa gì — chỉ là bây giờ nó ghi đè
-//        bằng chính công thức đã dùng để lọc, tức là vô hại/idempotent.
-//
-// FIX-2 [thiếu field — vỡ giao diện]:
-//   scored.map() cũ KHÔNG trả field `tags`, trong khi FALLBACK_NEWS CÓ
-//   `tags`. SmartNewsCard.jsx đọc item.tags?.length → bài live luôn thiếu
-//   tag hiển thị dù fallback thì có → 2 nguồn dữ liệu khác SHAPE nhau.
-//   Fix: dùng scoreNewsRelevance() (FIX-1) nên tags có sẵn cho mọi item,
-//        đồng nhất shape với FALLBACK_NEWS.
-//
-// FIX-3 [logic sai — direction không bao giờ ra 'bear']:
-//   Regex cũ chỉ match từ khoá BULLISH (strike/shock/shortage/cut) để gán
-//   direction:'bull', còn lại luôn là 'neutral' — bài live KHÔNG BAO GIỜ
-//   nhận được direction:'bear', trong khi FALLBACK_NEWS lại có ví dụ 'bear'.
-//   Fix: thêm bộ từ khoá bearish (hike, hawkish, tariff, oversupply…),
-//        ưu tiên kiểm tra bearish trước để tránh nhập nhằng.
-//
-// FIX-4 [parsing RSS không sạch — lỗi hiển thị]:
-//   - Regex title/link không strip CDATA (<![CDATA[...]]>) → tiêu đề hiện
-//     ra UI kèm rác "<![CDATA[" / "]]>".
-//   - Không decode HTML entity (&amp; &#39; &quot;) → hiển thị sai ký tự.
-//   - new URL(item.link) có thể throw nếu link rỗng/malformed → crash CẢ
-//     request (rơi vào catch tổng, loại bỏ luôn các bài báo hợp lệ khác).
-//   - pubDate không hợp lệ → formatAge() trả "NaN phút".
-//   Fix: hàm cleanText() strip CDATA + decode entity; try/catch riêng từng
-//        item khi tạo URL; guard isNaN cho pubDate.
-//
-// Feed Bloomberg cũ là URL placeholder ("ví dụ" — không tồn tại thật) →
-// thay bằng các nguồn RSS công khai thật: mining.com, kitco.com. Giữ
-// nguyên Promise.allSettled nên 1 feed lỗi không ảnh hưởng feed khác
-// (thiết kế gốc đã đúng, giữ nguyên).
-// ═══════════════════════════════════════════════════════════════════════════
+// ĐÃ SỬA (bản 2): bổ sung field `link` vào object trả về — bản trước
+// chỉ dùng `item.link` nội bộ để tính `source` (new URL(item.link))
+// rồi KHÔNG trả field này ra ngoài, khiến nút "Đọc bài gốc" ở
+// CommandCenterTab không có URL nào để trỏ tới. Đây là bổ sung tối
+// thiểu, không đổi field/logic nào khác đã có.
 
-import { scoreNewsRelevance } from '../../lib/verdictCalculations'; // FIX-1: dùng chung 1 nguồn tính điểm
+import { scoreNewsRelevance } from '../../lib/verdictCalculations';
 
 const CACHE = new Map();
-const CACHE_TTL = 5 * 60 * 1000; // giữ nguyên như bản gốc
+const CACHE_TTL = 5 * 60 * 1000;
 
-// ─── RSS feeds — thay placeholder không tồn tại bằng nguồn thật, miễn phí ────
 const RSS_FEEDS = [
-  'https://www.reuters.com/markets/commodities/rss', // best-effort, có thể 404 tuỳ thời điểm
-  'https://www.mining.com/feed/',                     // mining.com — RSS công khai, ổn định
-  'https://www.kitco.com/rss/KitcoNews.xml',          // Kitco metals news — RSS công khai
+  'https://www.reuters.com/markets/commodities/rss',
+  'https://www.mining.com/feed/',
+  'https://www.kitco.com/rss/KitcoNews.xml',
 ];
 
 const COPPER_KEYWORDS = [
@@ -67,14 +24,13 @@ const COPPER_KEYWORDS = [
 function isRelevant(text) {
   if (!text) return false;
   const lower = text.toLowerCase();
-  return COPPER_KEYWORDS.some(kw => lower.includes(kw));
+  return COPPER_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
-// ─── FIX-4: strip CDATA + decode HTML entity, không cần thêm dependency ─────
 function cleanText(raw) {
   if (!raw) return '';
   return raw
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1') // bỏ wrapper CDATA
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
     .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
@@ -83,7 +39,6 @@ function cleanText(raw) {
     .trim();
 }
 
-// ─── FIX-3: bổ sung bearish keywords — trước đó direction không bao giờ 'bear'
 function detectDirection(title) {
   const t = (title || '').toLowerCase();
   const bearish = /hike|hawkish|no rate cut|tariff|oversupply|stockpile build|inventor(y|ies) (rise|rises|climb|climbs|build)|recession|demand falls|slowdown/;
@@ -98,20 +53,19 @@ async function parseRSS(url) {
     const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const xml = await resp.text();
-    // Simple regex parse — thay bằng xml2js nếu cần robust hơn (giữ nguyên cách tiếp cận gốc)
     const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)]
-      .map(m => {
+      .map((m) => {
         const block = m[1];
-        const title   = cleanText(block.match(/<title>([\s\S]*?)<\/title>/)?.[1] || '');
-        const link    = cleanText(block.match(/<link>([\s\S]*?)<\/link>/)?.[1] || '');
+        const title = cleanText(block.match(/<title>([\s\S]*?)<\/title>/)?.[1] || '');
+        const link = cleanText(block.match(/<link>([\s\S]*?)<\/link>/)?.[1] || '');
         const pubDate = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1] || '';
         return { title, link, pubDate };
       })
-      .filter(item => isRelevant(item.title));
+      .filter((item) => isRelevant(item.title));
     return items;
   } catch (e) {
     console.warn('[parseRSS]', url, e.message);
-    return []; // giữ nguyên hành vi gốc — 1 feed lỗi không phá các feed khác
+    return [];
   }
 }
 
@@ -125,56 +79,52 @@ export default async function handler(req, res) {
   try {
     const results = await Promise.allSettled(RSS_FEEDS.map(parseRSS));
     const allItems = results
-      .filter(r => r.status === 'fulfilled')
-      .flatMap(r => r.value);
+      .filter((r) => r.status === 'fulfilled')
+      .flatMap((r) => r.value);
 
     const scored = allItems
-      .map(item => {
-        // FIX-4: bọc riêng từng item — 1 link hỏng không làm crash toàn bộ
+      .map((item) => {
         let source = 'unknown';
         try {
           source = new URL(item.link || 'https://reuters.com').hostname.replace('www.', '');
-        } catch { /* giữ 'unknown', không throw ra ngoài */ }
+        } catch { /* giữ 'unknown' */ }
 
-        // FIX-1 + FIX-2: dùng CHUNG hàm tính điểm/tag với client
-        // (lib/verdictCalculations.js) — không còn 2 thuật toán lệch nhau
         const { score, tags } = scoreNewsRelevance(item.title);
 
         return {
           title: item.title,
+          link: item.link, // ĐÃ THÊM — trước đây bị bỏ sót, khiến "Đọc bài gốc" không có URL
           source,
           age: item.pubDate ? formatAge(item.pubDate) : 'N/A',
           score,
-          tags,                                   // FIX-2: field còn thiếu ở bản gốc
-          direction: detectDirection(item.title),  // FIX-3: giờ có cả 'bear'
+          tags,
+          direction: detectDirection(item.title),
         };
       })
-      .filter(item => item.score >= 6) // ngưỡng giữ nguyên như bản gốc
+      .filter((item) => item.score >= 6)
       .sort((a, b) => b.score - a.score)
       .slice(0, 8);
 
     const data = {
       items: scored.length ? scored : FALLBACK_NEWS,
-      filtered: allItems.length,   // giữ nguyên tên field (backward compatible)
-      relevant: scored.length,     // giữ nguyên tên field (backward compatible)
-      fetched: results.length,     // bổ sung mới — không phá field cũ, chỉ thêm
+      filtered: allItems.length,
+      relevant: scored.length,
+      fetched: results.length,
       source: scored.length ? 'rss-live' : 'fallback',
     };
 
     CACHE.set(cacheKey, { data, ts: Date.now() });
     return res.status(200).json(data);
-
   } catch (e) {
     console.error('[/api/news]', e.message);
     return res.status(200).json({ items: FALLBACK_NEWS, error: e.message, source: 'fallback' });
   }
 }
 
-// ─── FIX-4: guard pubDate không hợp lệ (tránh "NaN phút") ────────────────────
 function formatAge(pubDate) {
   const t = new Date(pubDate).getTime();
   if (isNaN(t)) return 'N/A';
-  const diff = Math.max(0, Date.now() - t); // tránh số âm nếu lệch giờ server
+  const diff = Math.max(0, Date.now() - t);
   const mins = Math.floor(diff / 60000);
   if (mins < 1) return 'vừa xong';
   if (mins < 60) return `${mins} phút`;
@@ -182,10 +132,10 @@ function formatAge(pubDate) {
   return `${hours} giờ`;
 }
 
-// Giữ nguyên 100% — đây là dữ liệu đang hoạt động tốt, không đổi (rule 1)
+// ĐÃ THÊM field `link` cho từng mục fallback để nhất quán shape
 const FALLBACK_NEWS = [
-  { score:9.2, title:'Chile Escondida workers vote on strike — 78% in favour', source:'reuters.com', age:'14 phút', direction:'bull', tags:['Supply','Urgent'] },
-  { score:7.8, title:'SHFE copper inventory falls 12,400t — 3rd consecutive week', source:'bloomberg.com', age:'1 giờ', direction:'bull', tags:['Supply','Demand'] },
-  { score:7.1, title:'Fed officials signal no rate cut until inflation at 2%', source:'wsj.com', age:'2 giờ', direction:'bear', tags:['Macro'] },
-  { score:6.4, title:'China $500B infrastructure stimulus — copper demand spike expected', source:'caixin.com', age:'3 giờ', direction:'bull', tags:['Demand','Macro'] },
+  { score: 9.2, title: 'Chile Escondida workers vote on strike — 78% in favour', link: 'https://reuters.com', source: 'reuters.com', age: '14 phút', direction: 'bull', tags: ['Supply', 'Urgent'] },
+  { score: 7.8, title: 'SHFE copper inventory falls 12,400t — 3rd consecutive week', link: 'https://bloomberg.com', source: 'bloomberg.com', age: '1 giờ', direction: 'bull', tags: ['Supply', 'Demand'] },
+  { score: 7.1, title: 'Fed officials signal no rate cut until inflation at 2%', link: 'https://wsj.com', source: 'wsj.com', age: '2 giờ', direction: 'bear', tags: ['Macro'] },
+  { score: 6.4, title: 'China $500B infrastructure stimulus — copper demand spike expected', link: 'https://caixin.com', source: 'caixin.com', age: '3 giờ', direction: 'bull', tags: ['Demand', 'Macro'] },
 ];
