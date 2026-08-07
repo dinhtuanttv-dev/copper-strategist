@@ -61,14 +61,31 @@ const CACHE_TTL = 5 * 60 * 1000; // giữ nguyên như bản gốc
 
 // ─── RSS feeds — thay placeholder không tồn tại bằng nguồn thật, miễn phí ────
 const RSS_FEEDS = [
-  'https://www.reuters.com/markets/commodities/rss', // best-effort, có thể 404 tuỳ thời điểm
   'https://www.mining.com/feed/',                     // mining.com — RSS công khai, ổn định
   'https://www.kitco.com/rss/KitcoNews.xml',          // Kitco metals news — RSS công khai
+  'https://www.reuters.com/markets/commodities/rss',  // Reuters commodities — best-effort
+  'https://feeds.feedburner.com/MiningNews',          // Mining news tổng hợp
 ];
 
 const COPPER_KEYWORDS = [
-  'copper', 'smelter', 'escondida', 'chile mine', 'shfe', 'lme copper',
-  'china manufacturing', 'grasberg', 'codelco',
+  // Tên kim loại và thị trường
+  'copper', 'cu ', ' cu,', 'hg futures', 'comex copper', 'lme copper',
+  'shfe copper', 'copper futures', 'red metal',
+  // Mỏ và công ty khai thác lớn
+  'escondida', 'codelco', 'grasberg', 'freeport', 'antofagasta',
+  'ivanhoe', 'kamoa', 'cerro verde', 'bingham canyon', 'chuquicamata',
+  'las bambas', 'spence', 'collahuasi',
+  // Địa lý sản xuất
+  'chile mine', 'peru mine', 'chile copper', 'peru copper',
+  'drc copper', 'congo copper', 'zambia copper',
+  // Chỉ số và tồn kho
+  'smelter', 'copper smelter', 'copper refin',
+  'copper inventor', 'copper stockpil', 'copper warehouse',
+  'copper supply', 'copper demand', 'copper output', 'copper production',
+  'copper deficit', 'copper surplus',
+  // Macro liên quan trực tiếp đến copper
+  'china manufacturing', 'china pmi', 'china infrastructure',
+  'copper price', 'base metal', 'industrial metal',
 ];
 
 function isRelevant(text) {
@@ -157,7 +174,7 @@ export default async function handler(req, res) {
           direction: detectDirection(item.title),  // FIX-3: giờ có cả 'bear'
         };
       })
-      .filter(item => item.score >= 6) // ngưỡng giữ nguyên như bản gốc
+      .filter(item => item.score >= 5) // hạ từ 6 xuống 5 — RSS thực tế trả ít tin copper hơn dự kiến
       .sort((a, b) => b.score - a.score)
       .slice(0, 8);
 
