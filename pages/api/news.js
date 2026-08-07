@@ -140,10 +140,13 @@ async function parseRSS(url) {
 }
 
 export default async function handler(req, res) {
+  const debug = req.query.debug === '1';
   const cacheKey = 'cu_news';
-  const hit = CACHE.get(cacheKey);
-  if (hit && Date.now() - hit.ts < CACHE_TTL) {
-    return res.status(200).json(hit.data);
+  if (!debug) {
+    const hit = CACHE.get(cacheKey);
+    if (hit && Date.now() - hit.ts < CACHE_TTL) {
+      return res.status(200).json(hit.data);
+    }
   }
 
   try {
@@ -180,10 +183,20 @@ export default async function handler(req, res) {
 
     const data = {
       items: scored.length ? scored : FALLBACK_NEWS,
-      filtered: allItems.length,   // giữ nguyên tên field (backward compatible)
-      relevant: scored.length,     // giữ nguyên tên field (backward compatible)
-      fetched: results.length,     // bổ sung mới — không phá field cũ, chỉ thêm
+      filtered: allItems.length,
+      relevant: scored.length,
+      fetched: results.length,
       source: scored.length ? 'rss-live' : 'fallback',
+      // debug mode: trả về 20 tiêu đề thô để kiểm tra từ khoá
+      ...(debug && {
+        _debug_raw_titles: allItems.slice(0, 20).map(i => i.title),
+        _debug_feed_status: results.map((r, idx) => ({
+          url: RSS_FEEDS[idx],
+          status: r.status,
+          count: r.status === 'fulfilled' ? r.value.length : 0,
+          error: r.status === 'rejected' ? r.reason?.message : undefined,
+        })),
+      }),
     };
 
     CACHE.set(cacheKey, { data, ts: Date.now() });
