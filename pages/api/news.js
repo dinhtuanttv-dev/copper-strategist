@@ -99,29 +99,39 @@ async function fetchViaAI(baseUrl) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
-        max_tokens: 1000,
+        model: 'gemini-1.5-flash',
+        max_tokens: 1200,
         messages: [{
           role: 'user',
-          content: `Search for the latest 6 copper market news from today. Include news about: copper price, LME/SHFE/COMEX copper, copper mining (Chile, Peru, DRC), copper supply/demand, smelter issues, China manufacturing PMI.
+          content: `You are a copper market news analyst. List 6 recent copper market news headlines.
+Focus on: copper price moves, LME/SHFE/COMEX copper, Chile/Peru/DRC mining, copper supply/demand, smelters, China PMI.
 
-Return ONLY valid JSON array, no markdown:
-[{"title":"<English headline>","source":"<domain>","direction":"bull|bear|neutral","tags":["Supply"|"Demand"|"Macro"|"Urgent"]}]`,
+Respond with ONLY a JSON array. No markdown, no explanation, no code blocks:
+[{"title":"headline in English","source":"domain.com","direction":"bull","tags":["Supply"]},{"title":"headline2","source":"domain2.com","direction":"bear","tags":["Macro"]}]
+
+direction must be one of: bull, bear, neutral
+tags must be from: Supply, Demand, Macro, Urgent`,
         }],
       }),
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
-    const text = (data.content || []).map(c => c.text || '').join('');
-    const clean = text.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(clean);
-    if (!Array.isArray(parsed)) throw new Error('Not array');
-    return parsed.map((item, i) => ({
-      title: item.title || '',
-      link: `https://${item.source || 'reuters.com'}`,
-      pubDate: new Date().toISOString(),
-      _fromAI: true,
-    })).filter(item => item.title);
+    const text = (data.content || []).map(c => c.text || '').join('').trim();
+
+    // Tìm JSON array dù Gemini có trả thêm text thừa xung quanh
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error(`Không tìm thấy JSON array trong: ${text.slice(0, 200)}`);
+    const parsed = JSON.parse(match[0]);
+    if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Array rỗng');
+
+    return parsed
+      .filter(item => item?.title && typeof item.title === 'string')
+      .map(item => ({
+        title: item.title.trim(),
+        link: `https://${(item.source || 'reuters.com').replace(/^https?:\/\//, '')}`,
+        pubDate: new Date().toISOString(),
+        _fromAI: true,
+      }));
   } catch (e) {
     console.warn('[fetchViaAI]', e.message);
     return [];
@@ -143,14 +153,16 @@ function scoreItems(rawItems) {
     .map(item => {
       let source = 'unknown';
       try { source = new URL(item.link || 'https://reuters.com').hostname.replace('www.', ''); } catch {}
-      const { score, tags } = scoreNewsRelevance(item.title);
+      const { score: rawScore, tags } = scoreNewsRelevance(item.title);
+      // Tin từ AI đã được lọc theo chủ đề copper — boost score để không bị loại
+      const score = item._fromAI ? Math.max(rawScore, 6) : rawScore;
       return {
         title: item.title,
         link: item.link,
         source,
         age: item.pubDate ? formatAge(item.pubDate) : 'vừa xong',
         score,
-        tags,
+        tags: tags?.length ? tags : (item._fromAI ? ['Copper'] : tags),
         direction: detectDirection(item.title),
       };
     })

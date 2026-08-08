@@ -10,7 +10,7 @@
  * Model string được map: claude-sonnet-4-5 → gemini-1.5-flash
  */
 
-const GEMINI_MODEL = 'gemini-1.5-flash'; // free tier, nhanh, đủ dùng
+const GEMINI_MODEL = 'gemini-1.5-flash-latest'; // đúng tên cho API v1beta
 const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 export default async function handler(req, res) {
