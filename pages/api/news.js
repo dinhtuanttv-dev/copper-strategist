@@ -59,12 +59,16 @@ import { scoreNewsRelevance } from '../../lib/verdictCalculations'; // FIX-1: d�
 const CACHE = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // giữ nguyên như bản gốc
 
-// ─── RSS feeds — thay placeholder không tồn tại bằng nguồn thật, miễn phí ────
+// ─── RSS feeds — dùng category-specific thay vì feed tổng hợp rồi lọc ────────
+// Bài học: feed tổng hợp (reuters/commodities, kitco/all) trả về nhiều loại
+// hàng hoá, ngày nào không có tin copper thì lọc về 0. Dùng feed đã lọc sẵn
+// theo chủ đề copper/base metals từ phía nguồn — đáng tin hơn nhiều.
 const RSS_FEEDS = [
-  'https://www.mining.com/feed/',                     // mining.com — RSS công khai, ổn định
-  'https://www.kitco.com/rss/KitcoNews.xml',          // Kitco metals news — RSS công khai
-  'https://www.reuters.com/markets/commodities/rss',  // Reuters commodities — best-effort
-  'https://feeds.feedburner.com/MiningNews',          // Mining news tổng hợp
+  'https://www.mining.com/tag/copper/feed/',          // mining.com copper category — ổn định
+  'https://www.kitco.com/rss/base_metals.xml',         // Kitco base metals (Cu/Al/Zn/Ni)
+  'https://www.northernminer.com/feed/',               // Northern Miner — mining news chuyên sâu
+  'https://www.mining-technology.com/feed/',           // Mining Technology RSS
+  'https://www.miningweekly.com/rss/',                 // Mining Weekly RSS
 ];
 
 const COPPER_KEYWORDS = [
@@ -117,6 +121,26 @@ function detectDirection(title) {
   return 'neutral';
 }
 
+// ─── Fallback: dùng NewsAPI free nếu RSS thất bại hoàn toàn ─────────────────
+async function fetchNewsAPI() {
+  const key = process.env.NEWSAPI_KEY;
+  if (!key) return [];
+  try {
+    const url = `https://newsapi.org/v2/everything?q=copper+mining+OR+copper+price+OR+LME+copper&language=en&pageSize=10&sortBy=publishedAt&apiKey=${key}`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) throw new Error(`NewsAPI HTTP ${resp.status}`);
+    const data = await resp.json();
+    return (data.articles || []).map(a => ({
+      title: cleanText(a.title || ''),
+      link: a.url || '',
+      pubDate: a.publishedAt || '',
+    })).filter(item => isRelevant(item.title));
+  } catch (e) {
+    console.warn('[fetchNewsAPI]', e.message);
+    return [];
+  }
+}
+
 async function parseRSS(url) {
   try {
     const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
@@ -151,9 +175,16 @@ export default async function handler(req, res) {
 
   try {
     const results = await Promise.allSettled(RSS_FEEDS.map(parseRSS));
-    const allItems = results
+    let allItems = results
       .filter(r => r.status === 'fulfilled')
       .flatMap(r => r.value);
+
+    // Nếu RSS không có tin nào — thử NewsAPI
+    if (allItems.length === 0) {
+      console.log('[/api/news] RSS cho 0 kết quả, thử NewsAPI...');
+      const newsApiItems = await fetchNewsAPI();
+      allItems = newsApiItems;
+    }
 
     const scored = allItems
       .map(item => {
@@ -196,6 +227,7 @@ export default async function handler(req, res) {
           count: r.status === 'fulfilled' ? r.value.length : 0,
           error: r.status === 'rejected' ? r.reason?.message : undefined,
         })),
+        _debug_newsapi_available: !!process.env.NEWSAPI_KEY,
       }),
     };
 
