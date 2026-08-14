@@ -553,7 +553,7 @@ export default function Home() {
     if (loadInv) return;
     setLoadInv(true); aLog('📦 Cập nhật tồn kho...');
     try {
-      const r = await fetch('/api/claude', {
+      const r = await fetch('/api/gemini', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           model:'claude-sonnet-4-5', max_tokens:500,
@@ -580,7 +580,7 @@ Return ONLY raw JSON: {"lme_stocks":<int>,"shfe_stocks":<int>,"cmex_stocks":<int
     if (loadCOT) return;
     setLoadCOT(true); aLog('🦈 Cập nhật COT...');
     try {
-      const r = await fetch('/api/claude', {
+      const r = await fetch('/api/gemini', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           model:'claude-sonnet-4-5', max_tokens:500,
@@ -606,7 +606,7 @@ Return ONLY raw JSON: {"mm_long":<int>,"comm_short":<int>,"fear_greed":<int>,"cu
     if (loadCal) return;
     setLoadCal(true); aLog('📅 Cập nhật lịch...');
     try {
-      const r = await fetch('/api/claude', {
+      const r = await fetch('/api/gemini', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           model:'claude-sonnet-4-5', max_tokens:800,
@@ -650,7 +650,7 @@ Return ONLY raw JSON array: [{"name":"<str>","impact":"<high|medium|low>","curre
     if (loadBS) return;
     setLoadBS(true); aLog('🦢 Quét Black Swan...');
     try {
-      const r = await fetch('/api/claude', {
+      const r = await fetch('/api/gemini', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           model:'claude-sonnet-4-5', max_tokens:800,
@@ -689,7 +689,7 @@ Return ONLY raw JSON array: [{"region":"<str>","event":"<Vietnamese>","impact":<
     if (loadVerdict) return;
     setLoadVerdict(true); aLog('🧠 AI Verdict...');
     try {
-      const r = await fetch('/api/claude', {
+      const r = await fetch('/api/gemini', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           model:'claude-sonnet-4-5', max_tokens:800,

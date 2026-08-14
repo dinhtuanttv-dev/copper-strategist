@@ -1,4 +1,4 @@
-/**
+﻿/**
  * pages/api/cron/collect-sample.js
  * ─────────────────────────────────────────────────────────────
  * Endpoint được Vercel Cron gọi định kỳ (cấu hình trong vercel.json).
@@ -53,3 +53,4 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: false, error: err.message });
   }
 }
+
