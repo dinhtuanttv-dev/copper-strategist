@@ -1,3 +1,4 @@
+﻿import NewsFilter from './NewsFilter';
 /**
  * components/CommandCenterTab.jsx (bản 3 — nối pipeline dữ liệu thật)
  * ─────────────────────────────────────────────────────────────
@@ -271,3 +272,4 @@ export default function CommandCenterTab({ s, ti, mh, verdict, bias, sigLabel, s
     </div>
   );
 }
+

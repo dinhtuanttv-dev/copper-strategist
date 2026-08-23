@@ -1,16 +1,13 @@
-// pages/api/news.js — Copper news aggregator v7
+// pages/api/news.js — Copper news aggregator v8
 // ═══ CHANGELOG ═══════════════════════════════════════════════════════════════
-// FIX-1: Dùng chung scoreNewsRelevance() từ lib/verdictCalculations.js
-// FIX-2: Thêm field `tags` còn thiếu
-// FIX-3: Thêm direction 'bear' (regex bearish)
-// FIX-4: cleanText() strip CDATA + decode entity
-// FIX-5: Thêm field `link` vào object trả về
-// FIX-6: Đổi sang Google News RSS (không cần key, không hết quota)
-//        Google News RSS: https://news.google.com/rss/search?q=copper+market&hl=en
-//        Luôn có tin mới, không bị block, không cần auth.
-//        AI chỉ dùng để PHÂN TÍCH từng tin khi user bấm mở rộng (news-detail.js)
-//        — không dùng AI để LẤY danh sách tin nữa (giải pháp đơn giản hơn,
-//        không phụ thuộc model string/quota).
+// FIX-1→5: (giữ nguyên lịch sử — dùng chung scoreNewsRelevance, thêm tags/link,
+//           direction bear, cleanText, Google News RSS thay RSS chết)
+// FIX-7 [MỚI — bug quan trọng]: scoreNewsRelevance() trả `tags` dạng STRING
+//   cách nhau bằng dấu cách ("supply demand urgent"), không phải MẢNG như
+//   toàn bộ UI mong đợi. Component NewsFilter gọi (n.tags||[]).forEach(...)
+//   — String không có .forEach → lỗi runtime, bộ lọc tag hỏng.
+//   Fix: chuẩn hoá tags thành mảng NGAY tại API, viết hoa chữ đầu, không
+//   phụ thuộc scoreNewsRelevance trả về string hay mảng.
 // ═══════════════════════════════════════════════════════════════════════════
 
 import { scoreNewsRelevance } from '../../lib/verdictCalculations';
@@ -18,7 +15,6 @@ import { scoreNewsRelevance } from '../../lib/verdictCalculations';
 const CACHE = new Map();
 const CACHE_TTL = 5 * 60 * 1000;
 
-// Google News RSS — luôn hoạt động, không cần key, không hết quota
 const RSS_FEEDS = [
   'https://news.google.com/rss/search?q=copper+mining+price&hl=en-US&gl=US&ceid=US:en',
   'https://news.google.com/rss/search?q=LME+copper+SHFE+copper&hl=en-US&gl=US&ceid=US:en',
@@ -31,8 +27,26 @@ function cleanText(raw) {
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
     .replace(/&amp;/g, '&').replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/<[^>]+>/g, '') // bỏ HTML tags còn sót
+    .replace(/<[^>]+>/g, '')
     .trim();
+}
+
+// FIX-7: chuẩn hoá tags — nhận string HOẶC mảng, luôn trả về mảng viết hoa
+function normalizeTags(rawTags) {
+  let arr;
+  if (Array.isArray(rawTags)) {
+    arr = rawTags;
+  } else if (typeof rawTags === 'string' && rawTags.trim()) {
+    arr = rawTags.trim().split(/\s+/);
+  } else {
+    arr = [];
+  }
+  const cleaned = arr
+    .filter(Boolean)
+    .map((t) => String(t).trim())
+    .filter((t) => t.length > 0)
+    .map((t) => t.charAt(0).toUpperCase() + t.slice(1).toLowerCase());
+  return cleaned.length ? [...new Set(cleaned)] : ['Copper'];
 }
 
 function detectDirection(title) {
@@ -72,13 +86,11 @@ async function parseGoogleNewsRSS(url) {
       .map(m => {
         const block = m[1];
         const title = cleanText(block.match(/<title>([\s\S]*?)<\/title>/)?.[1] || '');
-        // Google News RSS link nằm trong <link> hoặc <guid>
         const rawLink = block.match(/<link>([\s\S]*?)<\/link>/)?.[1]
           || block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/)?.[1]
           || '';
         const link = cleanText(rawLink);
         const pubDate = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1] || '';
-        // Source từ Google News thường trong <source> tag
         const source = cleanText(block.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1] || '');
         return { title, link, pubDate, sourceLabel: source };
       })
@@ -91,7 +103,7 @@ async function parseGoogleNewsRSS(url) {
 
 export default async function handler(req, res) {
   const debug = req.query.debug === '1';
-  const cacheKey = 'cu_news_v7';
+  const cacheKey = 'cu_news_v8';
 
   if (!debug) {
     const hit = CACHE.get(cacheKey);
@@ -106,7 +118,6 @@ export default async function handler(req, res) {
       .filter(r => r.status === 'fulfilled')
       .flatMap(r => r.value);
 
-    // Dedup theo title
     const seen = new Set();
     const unique = allItems.filter(item => {
       const key = item.title.slice(0, 60).toLowerCase();
@@ -128,11 +139,11 @@ export default async function handler(req, res) {
           source,
           age: item.pubDate ? formatAge(item.pubDate) : 'N/A',
           score,
-          tags: tags?.length ? tags : ['Copper'],
+          tags: normalizeTags(tags), // FIX-7: luôn là mảng chuẩn
           direction: detectDirection(item.title),
         };
       })
-      .filter(item => item.score >= 4) // ngưỡng thấp hơn — Google News đã lọc sẵn
+      .filter(item => item.score >= 4)
       .sort((a, b) => b.score - a.score)
       .slice(0, 8);
 
@@ -148,10 +159,7 @@ export default async function handler(req, res) {
           url: RSS_FEEDS[idx].slice(0, 80),
           status: r.status,
           count: r.status === 'fulfilled' ? r.value.length : 0,
-          error: r.status === 'rejected' ? r.reason?.message : undefined,
         })),
-        _debug_unique: unique.length,
-        _debug_sample_titles: unique.slice(0, 5).map(i => i.title),
       }),
     };
 
