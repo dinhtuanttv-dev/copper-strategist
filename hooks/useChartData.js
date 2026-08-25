@@ -54,10 +54,11 @@ function lsSave(data) {
 // ── Main hook ─────────────────────────────────────────────────────────────────
 export function useChartData(activeTF = 'H4', s = {}) {
   const safeS    = s || {};
-  const cacheRef = useRef(lsLoad());
+  const [initialCache] = useState(() => lsLoad());
+  const cacheRef = useRef(initialCache);
 
   const getInit = () => {
-    const c = cacheRef.current[activeTF] || [];
+    const c = initialCache[activeTF] || [];
     return c.length >= 3 ? c : buildSyntheticBars(safeS.comex || 6.07, activeTF, 60);
   };
 

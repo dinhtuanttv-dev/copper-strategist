@@ -61,7 +61,7 @@ export default memo(function SessionHeatmap({ sessionByWeekday }) {
         </table>
       </div>
       <div style={{ fontSize: 8, color: 'var(--muted)', marginTop: 6 }}>
-        Ô "–" = chưa đủ dữ liệu cho tổ hợp (thứ, phiên) đó — mỗi ô cần nhiều lần lặp lại mới đáng tin cậy, sẽ lấp đầy dần theo thời gian.
+        Ô &quot;–&quot; = chưa đủ dữ liệu cho tổ hợp (thứ, phiên) đó — mỗi ô cần nhiều lần lặp lại mới đáng tin cậy, sẽ lấp đầy dần theo thời gian.
       </div>
     </div>
   );
