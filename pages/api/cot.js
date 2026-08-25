@@ -59,8 +59,9 @@ function toFiniteNumber(v) {
 
 export default async function handler(req, res) {
   const cacheKey = 'cot_copper';
+  const force = req.query.force === '1';
   const hit = CACHE.get(cacheKey);
-  if (hit && Date.now() - hit.ts < CACHE_TTL) {
+  if (!force && hit && Date.now() - hit.ts < CACHE_TTL) {
     return res.status(200).json(hit.data);
   }
 
@@ -69,11 +70,15 @@ export default async function handler(req, res) {
     // Commodity code cho Copper: "COPPER-GRADE #1"
     // FIX-3: $limit=2 để có tuần trước tính oi_change_pct thật
     // FIX-5: upper() cho LIKE — không phụ thuộc case chính xác
-    const url = 'https://publicreporting.cftc.gov/resource/6dca-aqww.json' +
-      '?$where=upper(contract_market_name) like \'%25COPPER%25\'' +
+    const baseUrl = process.env.CFTC_COT_URL || 'https://publicreporting.cftc.gov/resource/6dca-aqww.json';
+    const separator = baseUrl.includes('?') ? '&' : '?';
+    const url = baseUrl + separator +
+      '$where=upper(contract_market_name) like \'%25COPPER%25\'' +
       '&$order=report_date_as_yyyy_mm_dd DESC&$limit=2';
 
-    const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
+    const headers = { Accept: 'application/json' };
+    if (process.env.CFTC_APP_TOKEN) headers['X-App-Token'] = process.env.CFTC_APP_TOKEN;
+    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
     if (!resp.ok) throw new Error(`CFTC ${resp.status}`);
 
     // FIX-4: bọc riêng bước parse JSON
