@@ -77,8 +77,9 @@ function classifyImpact(rawName) {
 
 export default async function handler(req, res) {
   const cacheKey = 'econ_cal';
+  const force = req.query.force === '1';
   const hit = CACHE.get(cacheKey);
-  if (hit && Date.now() - hit.ts < CACHE_TTL) {
+  if (!force && hit && Date.now() - hit.ts < CACHE_TTL) {
     return res.status(200).json(hit.data);
   }
 
@@ -131,7 +132,7 @@ export default async function handler(req, res) {
         };
       })
       .filter(Boolean)                    // loại bỏ null từ FIX-3
-      .filter(e => e.minutesUntil > -60)  // chỉ giữ sự kiện chưa qua quá 1h — giữ nguyên logic gốc
+      .filter(e => e.minutesUntil >= 0)   // chỉ giữ event đang chờ, tự loại event đã kết thúc
       .sort((a, b) => a.minutesUntil - b.minutesUntil)
       .slice(0, 10);
 
