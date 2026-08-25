@@ -50,11 +50,55 @@
 
 const CACHE = new Map();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h — CFTC chỉ update thứ 6, giữ nguyên
+const AdmZip = require('adm-zip');
+const XLSX = require('xlsx');
 
 // ─── FIX-1: validate số hữu hạn thật, không dùng `||` (giống chuẩn lme.js) ───
 function toFiniteNumber(v) {
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+async function fetchOfficialArchive() {
+  const year = new Date().getUTCFullYear();
+  const resp = await fetch(`https://www.cftc.gov/files/dea/history/deacot${year}.zip`, {
+    headers: { Accept: 'application/zip', 'User-Agent': 'copper-strategist/1.0' },
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!resp.ok) throw new Error(`CFTC archive ${resp.status}`);
+  const zip = new AdmZip(Buffer.from(await resp.arrayBuffer()));
+  const entry = zip.getEntry('annual.txt');
+  if (!entry) throw new Error('CFTC archive thiếu annual.txt');
+  const workbook = XLSX.read(entry.getData().toString('utf8'), { type: 'string' });
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: null });
+  const copperRows = rows
+    .filter(row => String(row['Market and Exchange Names'] || '').toUpperCase().includes('COPPER'))
+    .sort((a, b) => String(b['As of Date in Form YYYY-MM-DD']).localeCompare(String(a['As of Date in Form YYYY-MM-DD'])));
+  const latest = copperRows[0];
+  const previous = copperRows[1];
+  if (!latest) throw new Error('CFTC archive không có dòng COPPER');
+  const mmLong = toFiniteNumber(latest['Noncommercial Positions-Long (All)']);
+  const mmShort = toFiniteNumber(latest['Noncommercial Positions-Short (All)']);
+  const commLong = toFiniteNumber(latest['Commercial Positions-Long (All)']);
+  const commShort = toFiniteNumber(latest['Commercial Positions-Short (All)']);
+  if ([mmLong, mmShort, commLong, commShort].some(value => value === null)) {
+    throw new Error('CFTC archive thiếu field Copper hợp lệ');
+  }
+  const nrLong = toFiniteNumber(latest['Nonreportable Positions-Long (All)']);
+  const nrShort = toFiniteNumber(latest['Nonreportable Positions-Short (All)']);
+  const oi = toFiniteNumber(latest['Open Interest (All)']);
+  const previousOi = toFiniteNumber(previous?.['Open Interest (All)']);
+  const rawDate = latest['As of Date in Form YYYY-MM-DD'];
+  const date = typeof rawDate === 'number'
+    ? new Date(Math.round((rawDate - 25569) * 86400 * 1000)).toISOString().slice(0, 10)
+    : String(rawDate || 'N/A');
+  return {
+    mm_long: mmLong, mm_short: mmShort, comm_long: commLong, comm_short: commShort,
+    net_mm: mmLong - mmShort, date,
+    nr_long: nrLong, nr_short: nrShort,
+    oi_change_pct: oi !== null && previousOi ? +(((oi - previousOi) / previousOi) * 100).toFixed(1) : null,
+    open_interest: oi, source: 'cftc-official-archive',
+  };
 }
 
 export default async function handler(req, res) {
@@ -136,6 +180,13 @@ export default async function handler(req, res) {
 
   } catch (e) {
     console.error('[/api/cot]', e.message);
+    try {
+      const archiveData = await fetchOfficialArchive();
+      CACHE.set(cacheKey, { data: archiveData, ts: Date.now() });
+      return res.status(200).json(archiveData);
+    } catch (archiveError) {
+      console.error('[/api/cot:archive]', archiveError.message);
+    }
     return res.status(200).json({
       mm_long: 62400, mm_short: 18200,
       comm_long: 45000, comm_short: 118000,

@@ -12,6 +12,7 @@
     "@ai-sdk/google": "^4.0.11",
     "@upstash/redis": "^1.38.1",
     "@vercel/kv": "^3.0.0",
+    "adm-zip": "^0.6.0",
     "ai": "^7.0.19",
     "google-trends-api": "^4.9.2",
     "lightweight-charts": "^4.1.3",

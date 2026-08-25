@@ -28,6 +28,7 @@
 
 const CACHE = new Map();
 const CACHE_TTL = 15 * 60 * 1000; // 15 phút — giữ nguyên như bản gốc
+const FREE_CALENDAR_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 
 // Sự kiện có ảnh hưởng trực tiếp đến đồng — whitelist (bổ sung thêm keyword)
 const COPPER_RELEVANT_EVENTS = [
@@ -75,6 +76,40 @@ function classifyImpact(rawName) {
   return 'medium';
 }
 
+async function fetchFreeCalendar(now) {
+  const resp = await fetch(FREE_CALENDAR_URL, {
+    headers: { Accept: 'application/json', 'User-Agent': 'copper-strategist/1.0' },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!resp.ok) throw new Error(`Free calendar HTTP ${resp.status}`);
+  const raw = await resp.json();
+  if (!Array.isArray(raw)) throw new Error('Free calendar trả response không hợp lệ');
+
+  return raw
+    .filter(event => ['USD', 'CNY'].includes(event.country) && isRelevant(event.title || ''))
+    .map(event => {
+      const eventTime = new Date(event.date);
+      if (Number.isNaN(eventTime.getTime())) return null;
+      const rawName = event.title || 'Unknown Event';
+      const impact = String(event.impact || '').toLowerCase();
+      return {
+        name: normalizeName(rawName),
+        impact: impact === 'high' ? 'high' : impact === 'medium' ? 'medium' : 'low',
+        time: eventTime.toLocaleTimeString('vi-VN', { hour:'2-digit', minute:'2-digit' }),
+        date: eventTime.toLocaleDateString('vi-VN'),
+        forecast: event.forecast ?? null,
+        prev: event.previous ?? null,
+        timestamp: eventTime.getTime(),
+        minutesUntil: Math.round((eventTime - now) / 60000),
+        affectsCu: classifyImpact(rawName),
+      };
+    })
+    .filter(Boolean)
+    .filter(event => event.minutesUntil >= 0)
+    .sort((a, b) => a.minutesUntil - b.minutesUntil)
+    .slice(0, 10);
+}
+
 export default async function handler(req, res) {
   const cacheKey = 'econ_cal';
   const force = req.query.force === '1';
@@ -85,11 +120,14 @@ export default async function handler(req, res) {
 
   try {
     const credential = process.env.TRADINGECONOMICS_API_KEY;
+    const now = new Date();
     if (!credential && !process.env.CALENDAR_PROVIDER_URL) {
-      throw new Error('Thiếu TRADINGECONOMICS_API_KEY hoặc CALENDAR_PROVIDER_URL');
+      const events = await fetchFreeCalendar(now);
+      const data = { events, source: 'forex-factory-free' };
+      CACHE.set(cacheKey, { data, ts: Date.now() });
+      return res.status(200).json(data);
     }
 
-    const now = new Date();
     const to = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
     const url = process.env.CALENDAR_PROVIDER_URL
       || `https://api.tradingeconomics.com/calendar/country/united%20states,china` +
