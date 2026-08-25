@@ -11,6 +11,9 @@ export function EventImpactCard({ calendar, comex, atr, C }) {
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:7 }}>
         {events.map((event, i) => {
           const sim = simulateEventImpact(event.name || 'Sự kiện');
+          const expectedImpact = sim
+            ? Object.values(sim.scenarios).reduce((sum, scenario) => sum + scenario.avgImpact * scenario.freq / 100, 0)
+            : null;
           return (
             <div key={i} style={{ border:`0.5px solid ${C.grid}`, borderRadius:7, padding:8 }}>
               <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
@@ -20,11 +23,18 @@ export function EventImpactCard({ calendar, comex, atr, C }) {
                 </span>
               </div>
               {sim ? (
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6 }}>
-                  {Object.entries(sim.scenarios).map(([key, val], j) => (
-                    <ImpactBox key={j} label={key} impact={val.avgImpact} freq={val.freq} C={C} />
-                  ))}
-                </div>
+                <>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6 }}>
+                    {Object.entries(sim.scenarios).map(([key, val], j) => (
+                      <ImpactBox key={j} label={key} impact={val.avgImpact} freq={val.freq} C={C} />
+                    ))}
+                  </div>
+                  <div style={{ marginTop:6, fontSize:9, color:C.muted }}>
+                    Tác động kỳ vọng: <strong style={{ color:expectedImpact >= 0 ? C.green : C.red }}>
+                      {expectedImpact >= 0 ? '+' : ''}{expectedImpact.toFixed(2)}%
+                    </strong> (weighted theo tần suất lịch sử)
+                  </div>
+                </>
               ) : (
                 <div style={{ fontSize:10, color:C.muted }}>Chưa có dữ liệu lịch sử cho sự kiện này</div>
               )}
@@ -72,6 +82,8 @@ function VolatilityConeSVG({ comex, atr, C }) {
   const lower = horizons.map((days, index) => `${index * 270},${toY(-dailyVol * Math.sqrt(days) * 2)}`).join(' ');
   const oneDayPct = dailyVol * 100;
   const sevenDayPct = dailyVol * Math.sqrt(7) * 2 * 100;
+  const oneDayMove = price * dailyVol;
+  const sevenDayMove = price * dailyVol * Math.sqrt(7) * 2;
   return (
     <svg width="100%" height="50" viewBox="0 0 540 50">
       <line x1="0" y1="25" x2="540" y2="25" stroke={C.grid} strokeWidth="0.5"/>
@@ -85,6 +97,8 @@ function VolatilityConeSVG({ comex, atr, C }) {
       <text x="4" y="40" fill={C.amber} fontSize="8" fontFamily="monospace">±{sevenDayPct.toFixed(2)}% / 7d</text>
       <text x="59" y="21" fill={C.blue} fontSize="8">${price.toFixed(3)} now</text>
       <text x="300" y="44" fill={C.amber} fontSize="8">ATR × √thời gian · ước tính</text>
+      <text x="300" y="12" fill={C.amber} fontSize="8">1d ${Math.max(0, price-oneDayMove).toFixed(3)}–${(price+oneDayMove).toFixed(3)}</text>
+      <text x="410" y="12" fill={C.amber} fontSize="8">7d ${Math.max(0, price-sevenDayMove).toFixed(3)}–${(price+sevenDayMove).toFixed(3)}</text>
     </svg>
   );
 }
