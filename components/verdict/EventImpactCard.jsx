@@ -1,9 +1,16 @@
 // components/verdict/EventImpactCard.jsx
 import { cardStyle, lblStyle } from './shared';
 import { simulateEventImpact } from '../../lib/verdictCalculations';
+import { useEffect, useState } from 'react';
 
 export function EventImpactCard({ calendar, comex, atr, C }) {
   const events = Array.isArray(calendar?.events) ? calendar.events.slice(0, 2) : [];
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   return (
     <div style={cardStyle(C)}>
@@ -11,6 +18,15 @@ export function EventImpactCard({ calendar, comex, atr, C }) {
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:7 }}>
         {events.map((event, i) => {
           const sim = simulateEventImpact(event.name || 'Sự kiện');
+          const timestamp = Number(event.timestamp);
+          const minutesUntil = Number.isFinite(timestamp) ? (timestamp - now) / 60000 : null;
+          const countdown = minutesUntil == null
+            ? 'Chưa có thời gian realtime'
+            : minutesUntil < 0
+              ? 'Đã diễn ra'
+              : minutesUntil < 60
+                ? `Còn ${Math.ceil(minutesUntil)} phút`
+                : `Còn ${Math.floor(minutesUntil / 60)}h ${Math.floor(minutesUntil % 60)}'`;
           const expectedImpact = sim
             ? Object.values(sim.scenarios).reduce((sum, scenario) => sum + scenario.avgImpact * scenario.freq / 100, 0)
             : null;
@@ -21,6 +37,9 @@ export function EventImpactCard({ calendar, comex, atr, C }) {
                 <span style={{ fontSize:11, fontWeight:500, color:'#e2e8f0' }}>
                   {event.name}{event.isFallback ? ' — dữ liệu tham khảo' : ` — ${event.time} ${event.date}`}
                 </span>
+              </div>
+              <div style={{ fontSize:9, color:minutesUntil == null ? C.muted : minutesUntil < 60 ? C.red : C.amber, marginBottom:6 }}>
+                ⏱ {countdown}
               </div>
               {sim ? (
                 <>
