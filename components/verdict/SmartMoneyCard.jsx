@@ -1,7 +1,42 @@
 // components/verdict/SmartMoneyCard.jsx — TIER 3: Behavioral edge
 import { cardStyle, lblStyle, barWrap } from './shared';
+import { useCallback, useState } from 'react';
 
 export function SmartMoneyCard({ divergence, C }) {
+  const [aiState, setAiState] = useState({ loading:false, text:null, error:null });
+
+  const analyzeWithGemini = useCallback(async () => {
+    setAiState({ loading:true, text:null, error:null });
+    const snapshot = {
+      source: divergence.source,
+      commercials: divergence.commercials,
+      managedMoney: divergence.managedMoney,
+      nonReportable: divergence.nonReportable,
+      openInterestTrend: divergence.openInterestTrend,
+      commZScore: divergence.commZScore,
+      divergence: divergence.divergence,
+    };
+    try {
+      const response = await fetch('/api/claude', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          max_tokens:500,
+          messages:[{ role:'user', content:
+            `Phân tích snapshot COT đồng dưới đây bằng tiếng Việt. Trả lời 3 câu ngắn: (1) Commercials, (2) Managed Money và Non-reportable, (3) kết luận Smart Money setup và rủi ro. Không tự bịa dữ liệu. Nguồn: ${snapshot.source}. JSON: ${JSON.stringify(snapshot)}`
+          }],
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      const text = (data.content || []).filter(block => block.type === 'text').map(block => block.text).join('').trim();
+      if (!text) throw new Error('Gemini không trả về nội dung phân tích');
+      setAiState({ loading:false, text, error:null });
+    } catch (error) {
+      setAiState({ loading:false, text:null, error:error.message });
+    }
+  }, [divergence]);
+
   if (!divergence) return <div style={cardStyle(C)}>Đang tải COT data...</div>;
 
   const groups = [
@@ -52,6 +87,21 @@ export function SmartMoneyCard({ divergence, C }) {
       <div style={{ fontSize:9, color:divergence.isFallback ? C.amber : C.muted, marginBottom:6 }}>
         {divergence.isFallback ? '⚠ Dữ liệu COT tham khảo, chưa xác thực live' : `Nguồn: ${divergence.source}`}
       </div>
+
+      <button onClick={analyzeWithGemini} disabled={aiState.loading} style={{
+        width:'100%', padding:'6px 8px', borderRadius:6, cursor:aiState.loading?'default':'pointer',
+        border:`1px solid ${C.blue}55`, background:`${C.blue}12`, color:C.blue,
+        fontSize:10, fontWeight:600,
+      }}>
+        {aiState.loading ? '⟳ Gemini đang phân tích...' : '✦ Phân tích Smart Money bằng Gemini'}
+      </button>
+      {aiState.error && <div style={{ color:C.red, fontSize:9, marginTop:5 }}>{aiState.error}</div>}
+      {aiState.text && (
+        <div style={{ marginTop:6, padding:'7px 9px', border:`0.5px solid ${C.blue}44`, borderRadius:7, background:`${C.blue}08`, color:'#b0b8d0', fontSize:10, lineHeight:1.55 }}>
+          <div style={{ color:C.blue, fontWeight:600, marginBottom:3 }}>Gemini insight · theo snapshot COT hiện tại</div>
+          {aiState.text}
+        </div>
+      )}
 
       {divergence.divergence && (
         <div style={{ padding:'7px 10px', background:`${C.green}10`,
