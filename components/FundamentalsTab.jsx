@@ -159,14 +159,16 @@ function Panel({ title, glow, children, badge, badgeCol, src }) {
 function BalanceGauge({ totalInv, deficit, src }) {
 
   const BASE    = 500000;
+  const safeInv = Number.isFinite(Number(totalInv)) ? Number(totalInv) : 0;
+  const safeDeficit = Number.isFinite(Number(deficit)) ? Number(deficit) : 0;
 
-  const pct     = Math.min(100,Math.round((totalInv/BASE)*100));
+  const pct     = Math.max(0,Math.min(100,Math.round((safeInv/BASE)*100)));
 
-  const surplus = totalInv > BASE;
+  const surplus = safeInv > BASE;
 
-  const col     = surplus?C.red:totalInv>BASE*0.7?C.amber:C.green;
+  const col     = surplus?C.red:safeInv>BASE*0.7?C.amber:C.green;
 
-  const label   = surplus?'DƯ CUNG':totalInv>BASE*0.7?'TRUNG LẬP':'THIẾU CUNG';
+  const label   = surplus?'DƯ CUNG':safeInv>BASE*0.7?'TRUNG LẬP':'THIẾU CUNG';
 
   const cx=90, cy=75, R=58;
 
@@ -216,7 +218,7 @@ function BalanceGauge({ totalInv, deficit, src }) {
 
           <text x={cx} y={cy-14} textAnchor="middle" fill={col} fontSize={17} fontWeight={800}>
 
-            {fmtMT(totalInv)}
+            {fmtMT(safeInv)}
 
           </text>
 
@@ -234,7 +236,7 @@ function BalanceGauge({ totalInv, deficit, src }) {
 
         {[
 
-          {lbl:'Deficit', val:deficit<0?`${(deficit/1000).toFixed(0)}k MT`:'±0', col:C.green},
+          {lbl:'Balance', val:safeDeficit===0?'±0':`${safeDeficit>0?'+':''}${(safeDeficit/1000).toFixed(0)}k MT`, col:safeDeficit<0?C.green:C.red},
 
           {lbl:'vs Base', val:`${pct}%`, col},
 

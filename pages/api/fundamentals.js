@@ -306,9 +306,9 @@ export default async function handler(req, res) {
   // ── Derive ──
   const totalInventory = inv.lme + inv.shfe + inv.comex;
   const balanceDeficit = invHistory.length >= 2
-    ? -(invHistory[invHistory.length-1].lme + invHistory[invHistory.length-1].comex
+    ? (invHistory[invHistory.length-1].lme + invHistory[invHistory.length-1].comex
         - invHistory[0].lme - invHistory[0].comex)
-    : -87000;
+    : 0;
 
   let tightness = 50;
   if (cot.mm_net) tightness += Math.max(-10, Math.min(10, (cot.mm_net/100000)*10));
