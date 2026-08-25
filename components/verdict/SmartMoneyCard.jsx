@@ -49,6 +49,10 @@ export function SmartMoneyCard({ divergence, C }) {
         })}
       </div>
 
+      <div style={{ fontSize:9, color:divergence.isFallback ? C.amber : C.muted, marginBottom:6 }}>
+        {divergence.isFallback ? '⚠ Dữ liệu COT tham khảo, chưa xác thực live' : `Nguồn: ${divergence.source}`}
+      </div>
+
       {divergence.divergence && (
         <div style={{ padding:'7px 10px', background:`${C.green}10`,
           border:`0.5px solid ${C.green}33`, borderRadius:7, marginBottom:6 }}>

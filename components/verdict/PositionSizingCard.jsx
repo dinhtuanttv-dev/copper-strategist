@@ -39,7 +39,7 @@ export function PositionSizingCard({ positionSizing, optionsIntel, C }) {
       {optionsIntel && (
         <div style={{ border:`0.5px solid ${C.grid}`, borderRadius:6, padding:7 }}>
           <div style={{ fontSize:9, color:C.muted, textTransform:'uppercase', letterSpacing:'.05em', marginBottom:5 }}>
-            Options market (CME Quikstrike)
+            Options market (ước tính, chưa có feed CME Quikstrike)
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:6 }}>
             <OptStat label="Put/Call ratio" value={optionsIntel.putCallRatio}
