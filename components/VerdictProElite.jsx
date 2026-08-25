@@ -43,9 +43,9 @@ export default function VerdictProElite({ s, ew, vsa, wyckoff, mh, verdict, atr,
   // Sự kiện tiếp theo có impact cao — dùng cho Pre-Event Alert
   const nextHighEvent = useMemo(() => {
     const calendar = rawData?.calendar;
-    if (!calendar || calendar.source === 'fallback') return null;
+    if (!calendar) return null;
     const events = Array.isArray(calendar.events) ? calendar.events : [];
-    return events
+    const providerEvent = events
       .map(event => {
         const timestamp = Number(event.timestamp);
         if (!Number.isFinite(timestamp)) return null;
@@ -53,7 +53,11 @@ export default function VerdictProElite({ s, ew, vsa, wyckoff, mh, verdict, atr,
       })
       .filter(Boolean)
       .filter(e => e.impact === 'high' && e.minutesUntil >= 0 && e.minutesUntil < 180)
-      .sort((a, b) => a.minutesUntil - b.minutesUntil)[0] || null;
+      .sort((a, b) => a.minutesUntil - b.minutesUntil)[0];
+    if (providerEvent) return providerEvent;
+    if (calendar.source !== 'fallback') return null;
+    const fallbackEvent = events.find(event => event.impact === 'high' && event.isFallback);
+    return fallbackEvent ? { ...fallbackEvent, estimated: true } : null;
   }, [rawData?.calendar, now]);
 
   return (

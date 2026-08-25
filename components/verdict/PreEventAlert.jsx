@@ -2,7 +2,8 @@
 export function PreEventAlert({ event, atr, comex, C }) {
   if (!event) return null;
   const at = Number.isFinite(Number(atr)) && Number(atr) > 0 ? Number(atr) : 0.12;
-  const minutesUntil = Math.max(0, Number(event.minutesUntil) || 0);
+  const hasCountdown = Number.isFinite(Number(event.minutesUntil));
+  const minutesUntil = hasCountdown ? Math.max(0, Number(event.minutesUntil)) : null;
 
   return (
     <div style={{
@@ -12,12 +13,13 @@ export function PreEventAlert({ event, atr, comex, C }) {
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
         <span style={{ color:C.red, fontSize:15 }}>⏰</span>
         <span style={{ fontSize:12, fontWeight:500, color:C.red }}>
-          Pre-Event Alert — {event.name} còn {minutesUntil < 60
-            ? `${minutesUntil} phút` : `${Math.floor(minutesUntil/60)}h ${minutesUntil%60}'`} ({event.time})
+          Pre-Event Alert{event.estimated ? ' (ước tính)' : ''} — {event.name}{hasCountdown
+            ? ` còn ${minutesUntil < 60 ? `${Math.floor(minutesUntil)} phút` : `${Math.floor(minutesUntil/60)}h ${Math.floor(minutesUntil%60)}'`}`
+            : ' — chưa có thời gian realtime'} {event.time ? `(${event.time})` : ''}
         </span>
         <span style={{ marginLeft:'auto', fontSize:10, padding:'2px 8px', borderRadius:4,
           background:`${C.red}18`, color:C.red, border:`0.5px solid ${C.red}44` }}>
-          Dự báo {event.forecast || 'N/A'} · Trước {event.prev || 'N/A'}
+          {event.estimated ? 'Fallback · ' : ''}Dự báo {event.forecast || 'N/A'} · Trước {event.prev || 'N/A'}
         </span>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:6 }}>
