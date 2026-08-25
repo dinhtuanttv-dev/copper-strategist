@@ -54,6 +54,12 @@ function SrcBadge({ src }) {
 
     fred:    { label:'✅ FRED API',   col:C.green  },
 
+    cme:     { label:'✅ CME Group',  col:C.green  },
+
+    lme:     { label:'✅ LME',        col:C.green  },
+
+    'cme+lme': { label:'✅ CME + LME', col:C.green },
+
     claude:  { label:'🤖 Claude AI', col:C.blue   },
 
     default: { label:'⚙️ Default',   col:C.muted  },
@@ -156,7 +162,7 @@ function Panel({ title, glow, children, badge, badgeCol, src }) {
 
 // ─── 1. Balance Gauge ─────────────────────────────────────────────────────────
 
-function BalanceGauge({ totalInv, deficit, src }) {
+function BalanceGauge({ totalInv, deficit, basis, src }) {
 
   const BASE    = 500000;
   const safeInv = Number.isFinite(Number(totalInv)) ? Number(totalInv) : 0;
@@ -236,7 +242,7 @@ function BalanceGauge({ totalInv, deficit, src }) {
 
         {[
 
-          {lbl:'Balance', val:safeDeficit===0?'±0':`${safeDeficit>0?'+':''}${(safeDeficit/1000).toFixed(0)}k MT`, col:safeDeficit<0?C.green:C.red},
+          {lbl:basis==='history'?'Δ tồn kho':'vs Base', val:safeDeficit===0?'±0':`${safeDeficit>0?'+':''}${(safeDeficit/1000).toFixed(0)}k MT`, col:safeDeficit<0?C.green:C.red},
 
           {lbl:'vs Base', val:`${pct}%`, col},
 
@@ -1217,6 +1223,8 @@ export default function FundamentalsTab({ s, mh, pci }) {
               totalInv={data.total_inventory||0}
 
               deficit={data.balance_deficit||0}
+
+              basis={data.balance_basis}
 
               src={src.inv} />
 

@@ -1,5 +1,5 @@
 // components/VerdictProElite.jsx — Main component, kết nối tất cả
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useVerdictEngine } from '../hooks/useVerdictEngine';
 
 // Sub-components (tách riêng file trong thực tế — import ở đây)
@@ -33,11 +33,28 @@ export default function VerdictProElite({ s, ew, vsa, wyckoff, mh, verdict, atr,
     smartMoneyDivergence, seasonal,
   } = engine;
 
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Sự kiện tiếp theo có impact cao — dùng cho Pre-Event Alert
   const nextHighEvent = useMemo(() => {
-    const events = rawData?.calendar?.events || [];
-    return events.find(e => e.impact === 'high' && e.minutesUntil < 180); // trong 3h
-  }, [rawData?.calendar]);
+    const calendar = rawData?.calendar;
+    if (!calendar || calendar.source === 'fallback') return null;
+    const events = Array.isArray(calendar.events) ? calendar.events : [];
+    return events
+      .map(event => {
+        const timestamp = Number(event.timestamp);
+        if (!Number.isFinite(timestamp)) return null;
+        return { ...event, minutesUntil: (timestamp - now) / 60000 };
+      })
+      .filter(Boolean)
+      .filter(e => e.impact === 'high' && e.minutesUntil >= 0 && e.minutesUntil < 180)
+      .sort((a, b) => a.minutesUntil - b.minutesUntil)[0] || null;
+  }, [rawData?.calendar, now]);
 
   return (
     <div style={{ display:'grid', gap:8, width:'100%', boxSizing:'border-box' }}>

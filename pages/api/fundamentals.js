@@ -15,13 +15,16 @@
 
 const XLSX = require('xlsx');
 
-// ── Vercel KV — root-fix cho lịch sử. Nếu chưa cài @vercel/kv hoặc chưa
-// setup env var, import sẽ throw — bọc try/catch để KHÔNG làm sập cả route.
+// ── Upstash/Vercel KV — dùng cùng client cho cả hai bộ tên biến môi trường.
+// Vercel KV dùng KV_REST_API_*, còn Upstash dùng UPSTASH_REDIS_REST_*.
 let kv = null;
 try {
-  kv = require('@vercel/kv').kv;
+  const { Redis } = require('@upstash/redis');
+  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (url && token) kv = new Redis({ url, token });
 } catch {
-  console.warn('[fundamentals] @vercel/kv chưa cài — dùng globalThis tạm thời');
+  console.warn('[fundamentals] Không khởi tạo được Upstash KV — dùng globalThis tạm thời');
 }
 
 const FUNDAMENTALS_VERSION = 'v4-kv-debug-20260823'; // ← đối chiếu field version trong response để CHẮC CHẮN bản mới đã chạy
@@ -128,10 +131,11 @@ async function fetchCotWithHistory() {
 
 // ═══ COMEX inventory — ROOT-FIX: debug vô điều kiện ════════════════════
 async function fetchComexInventory() {
-  const url = 'https://www.cmegroup.com/delivery_reports/Copper_Stocks.xls';
+  const url = process.env.CME_COPPER_STOCKS_URL
+    || 'https://www.cmegroup.com/delivery_reports/Copper_Stocks.xls';
   const resp = await fetch(url, {
     headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(20000),
   });
   if (!resp.ok) throw new Error(`CME HTTP ${resp.status}`);
   const buf = Buffer.from(await resp.arrayBuffer());
@@ -149,9 +153,13 @@ async function fetchComexInventory() {
 
 // ═══ LME ════════════════════════════════════════════════════════════════
 async function fetchLmeInventory() {
-  const url = 'https://api.tradingeconomics.com/commodity/lme-copper-stocks?c=guest:guest';
-  const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
-  if (!resp.ok) throw new Error(`TE HTTP ${resp.status}`);
+  const credential = process.env.TRADINGECONOMICS_API_KEY;
+  const defaultUrl = credential
+    ? `https://api.tradingeconomics.com/commodity/lme-copper-stocks?c=${encodeURIComponent(credential)}`
+    : 'https://api.tradingeconomics.com/commodity/lme-copper-stocks?c=guest:guest';
+  const url = process.env.LME_COPPER_STOCKS_URL || defaultUrl;
+  const resp = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if (!resp.ok) throw new Error(`LME provider HTTP ${resp.status}`);
   const json = await resp.json();
   const latest = Array.isArray(json) ? json[0] : json;
   const val = toFiniteNumber(latest?.Value);
@@ -250,7 +258,10 @@ export default async function handler(req, res) {
     debug.comex_raw_row = r.rawRow; // ROOT-FIX: luôn có, kể cả khi thành công
   } catch (e) { debug.comex_error = e.message; }
   try { lmeMt = await fetchLmeInventory(); } catch (e) { debug.lme_error = e.message; }
-  if (comexMt !== null || lmeMt !== null) src.inv = 'cftc';
+  src.inv = comexMt !== null && lmeMt !== null ? 'cme+lme'
+    : comexMt !== null ? 'cme'
+    : lmeMt !== null ? 'lme'
+    : 'default';
 
   const inv = {
     lme: lmeMt ?? 280000, shfe: 51000, comex: comexMt ?? 10000,
@@ -305,10 +316,12 @@ export default async function handler(req, res) {
 
   // ── Derive ──
   const totalInventory = inv.lme + inv.shfe + inv.comex;
-  const balanceDeficit = invHistory.length >= 2
+  const BALANCE_BASE = 500000;
+  const hasInventoryHistory = invHistory.length >= 2;
+  const balanceDeficit = hasInventoryHistory
     ? (invHistory[invHistory.length-1].lme + invHistory[invHistory.length-1].comex
         - invHistory[0].lme - invHistory[0].comex)
-    : 0;
+    : totalInventory - BALANCE_BASE;
 
   let tightness = 50;
   if (cot.mm_net) tightness += Math.max(-10, Math.min(10, (cot.mm_net/100000)*10));
@@ -318,7 +331,9 @@ export default async function handler(req, res) {
 
   const data = {
     inv, cot, cot_history: cotHistory,
-    curve, tightness, balance_deficit: balanceDeficit, total_inventory: totalInventory,
+    curve, tightness, balance_deficit: balanceDeficit,
+    balance_basis: hasInventoryHistory ? 'history' : 'baseline',
+    total_inventory: totalInventory,
     data_sources: src,
     inv_history: invHistory,
     tcrc_history: tcrcHistory,

@@ -83,10 +83,14 @@ export default async function handler(req, res) {
 
   try {
     // TradingEconomics free endpoint (giới hạn nhưng miễn phí) — giữ nguyên URL gốc
-    const url = 'https://api.tradingeconomics.com/commodity/lme-copper-stocks?c=guest:guest';
+    const credential = process.env.TRADINGECONOMICS_API_KEY;
+    const defaultUrl = credential
+      ? `https://api.tradingeconomics.com/commodity/lme-copper-stocks?c=${encodeURIComponent(credential)}`
+      : 'https://api.tradingeconomics.com/commodity/lme-copper-stocks?c=guest:guest';
+    const url = process.env.LME_COPPER_STOCKS_URL || defaultUrl;
     const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
 
-    if (!resp.ok) throw new Error(`TE ${resp.status}`);
+    if (!resp.ok) throw new Error(`LME provider HTTP ${resp.status}`);
     const json = await resp.json();
     const latest = Array.isArray(json) ? json[0] : json;
 

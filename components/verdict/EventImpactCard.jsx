@@ -3,20 +3,20 @@ import { cardStyle, lblStyle } from './shared';
 import { simulateEventImpact } from '../../lib/verdictCalculations';
 
 export function EventImpactCard({ calendar, comex, atr, C }) {
-  const events = (calendar?.events || []).slice(0, 2);
+  const events = Array.isArray(calendar?.events) ? calendar.events.slice(0, 2) : [];
 
   return (
     <div style={cardStyle(C)}>
       <div style={lblStyle(C)}>🧪 Event impact simulator + volatility cone</div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:7, marginBottom:7 }}>
         {events.map((event, i) => {
-          const sim = simulateEventImpact(event.name);
+          const sim = simulateEventImpact(event.name || 'Sự kiện');
           return (
             <div key={i} style={{ border:`0.5px solid ${C.grid}`, borderRadius:7, padding:8 }}>
               <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
                 <div style={{ width:6, height:6, borderRadius:'50%', background:C.red, flexShrink:0 }}/>
                 <span style={{ fontSize:11, fontWeight:500, color:'#e2e8f0' }}>
-                  {event.name} — {event.time} {event.date}
+                  {event.name}{event.isFallback ? ' — dữ liệu tham khảo' : ` — ${event.time} ${event.date}`}
                 </span>
               </div>
               {sim ? (
@@ -41,7 +41,7 @@ export function EventImpactCard({ calendar, comex, atr, C }) {
       {/* Volatility Cone */}
       <div style={{ border:`0.5px solid ${C.grid}`, borderRadius:7, padding:7 }}>
         <div style={{ fontSize:9, color:C.muted, marginBottom:4, textTransform:'uppercase', letterSpacing:'.05em' }}>
-          Volatility cone — biên độ kỳ vọng (ATR 90 ngày)
+          Volatility cone — biên độ ước tính từ ATR hiện tại
         </div>
         <VolatilityConeSVG comex={comex} atr={atr} C={C} />
       </div>
@@ -63,23 +63,28 @@ function ImpactBox({ label, impact, freq, C }) {
 }
 
 function VolatilityConeSVG({ comex, atr, C }) {
-  const at = (atr || 0.12) / (comex || 6.265) * 100; // % ATR
+  const price = Number.isFinite(Number(comex)) && Number(comex) > 0 ? Number(comex) : 6.265;
+  const atrValue = Number.isFinite(Number(atr)) && Number(atr) > 0 ? Number(atr) : 0.12;
+  const dailyVol = atrValue / price;
+  const horizons = [1, 3, 7];
+  const toY = (percent) => Math.max(2, Math.min(48, 25 - percent * 1000));
+  const upper = horizons.map((days, index) => `${index * 270},${toY(dailyVol * Math.sqrt(days) * 2)}`).join(' ');
+  const lower = horizons.map((days, index) => `${index * 270},${toY(-dailyVol * Math.sqrt(days) * 2)}`).join(' ');
+  const oneDayPct = dailyVol * 100;
+  const sevenDayPct = dailyVol * Math.sqrt(7) * 2 * 100;
   return (
     <svg width="100%" height="50" viewBox="0 0 540 50">
       <line x1="0" y1="25" x2="540" y2="25" stroke={C.grid} strokeWidth="0.5"/>
-      <polygon points="0,25 165,8 165,42" fill={`${C.red}12`} />
-      <line x1="0" y1="25" x2="165" y2="8" stroke={C.red} strokeWidth="1" strokeDasharray="4,3"/>
-      <line x1="0" y1="25" x2="165" y2="42" stroke={C.red} strokeWidth="1" strokeDasharray="4,3"/>
-      <line x1="165" y1="2" x2="165" y2="48" stroke={C.red} strokeWidth="1.5"/>
-      <polygon points="165,8 540,2 540,48 165,42" fill={`${C.amber}0a`} />
-      <line x1="165" y1="8" x2="540" y2="2" stroke={C.amber} strokeWidth="1" strokeDasharray="4,3"/>
-      <line x1="165" y1="42" x2="540" y2="48" stroke={C.amber} strokeWidth="1" strokeDasharray="4,3"/>
+      <polygon points={`0,25 ${upper} ${lower.split(' ').reverse().join(' ')}`} fill={`${C.amber}12`} />
+      <polyline points={upper} fill="none" stroke={C.amber} strokeWidth="1" strokeDasharray="4,3"/>
+      <polyline points={lower} fill="none" stroke={C.amber} strokeWidth="1" strokeDasharray="4,3"/>
+      <line x1="0" y1="2" x2="0" y2="48" stroke={C.red} strokeWidth="1.5"/>
       <line x1="0" y1="25" x2="540" y2="25" stroke={C.blue} strokeWidth="1.5" strokeDasharray="6,3"/>
       <circle cx="55" cy="25" r="3.5" fill={C.blue}/>
-      <text x="4" y="14" fill={C.red} fontSize="8" fontFamily="monospace">+{(at*1.5).toFixed(1)}%</text>
-      <text x="4" y="40" fill={C.red} fontSize="8" fontFamily="monospace">−{(at*1.5).toFixed(1)}%</text>
-      <text x="59" y="21" fill={C.blue} fontSize="8">${comex?.toFixed(3)} now</text>
-      <text x="300" y="44" fill={C.amber} fontSize="8">Sau event — vol mở rộng</text>
+      <text x="4" y="14" fill={C.red} fontSize="8" fontFamily="monospace">±{oneDayPct.toFixed(2)}% / 1d</text>
+      <text x="4" y="40" fill={C.amber} fontSize="8" fontFamily="monospace">±{sevenDayPct.toFixed(2)}% / 7d</text>
+      <text x="59" y="21" fill={C.blue} fontSize="8">${price.toFixed(3)} now</text>
+      <text x="300" y="44" fill={C.amber} fontSize="8">ATR × √thời gian · ước tính</text>
     </svg>
   );
 }

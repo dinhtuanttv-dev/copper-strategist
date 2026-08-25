@@ -16,6 +16,7 @@ export function useVerdictEngine({ s, ew, vsa, wyckoff, mh, verdict, atr, blackS
   const [error, setError]       = useState(null);
   const [lastFetch, setLastFetch] = useState(null);
   const pollRef = useRef(null);
+  const fetchDataRef = useRef(null);
 
   // ── Fetch tất cả nguồn dữ liệu (song song, không block nhau) ──────────────
   const fetchData = useCallback(async (force = false) => {
@@ -34,10 +35,14 @@ export function useVerdictEngine({ s, ew, vsa, wyckoff, mh, verdict, atr, blackS
     }
   }, [s, lastFetch]);
 
+  useEffect(() => {
+    fetchDataRef.current = fetchData;
+  }, [fetchData]);
+
   // ── Initial fetch + polling ──────────────────────────────────────────────
   useEffect(() => {
     fetchData(true);
-    pollRef.current = setInterval(() => fetchData(false), POLL_INTERVAL);
+    pollRef.current = setInterval(() => fetchDataRef.current?.(false), POLL_INTERVAL);
     return () => clearInterval(pollRef.current);
   }, []); // chỉ chạy 1 lần khi mount
 

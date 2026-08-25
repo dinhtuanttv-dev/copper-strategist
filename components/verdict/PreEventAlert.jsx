@@ -1,8 +1,8 @@
 // components/verdict/PreEventAlert.jsx
 export function PreEventAlert({ event, atr, comex, C }) {
   if (!event) return null;
-  const at = atr || 0.12;
-  const cp = comex || 6.265;
+  const at = Number.isFinite(Number(atr)) && Number(atr) > 0 ? Number(atr) : 0.12;
+  const minutesUntil = Math.max(0, Number(event.minutesUntil) || 0);
 
   return (
     <div style={{
@@ -12,8 +12,8 @@ export function PreEventAlert({ event, atr, comex, C }) {
       <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
         <span style={{ color:C.red, fontSize:15 }}>⏰</span>
         <span style={{ fontSize:12, fontWeight:500, color:C.red }}>
-          Pre-Event Alert — {event.name} còn {event.minutesUntil < 60
-            ? `${event.minutesUntil} phút` : `${Math.floor(event.minutesUntil/60)}h ${event.minutesUntil%60}'`} ({event.time})
+          Pre-Event Alert — {event.name} còn {minutesUntil < 60
+            ? `${minutesUntil} phút` : `${Math.floor(minutesUntil/60)}h ${minutesUntil%60}'`} ({event.time})
         </span>
         <span style={{ marginLeft:'auto', fontSize:10, padding:'2px 8px', borderRadius:4,
           background:`${C.red}18`, color:C.red, border:`0.5px solid ${C.red}44` }}>

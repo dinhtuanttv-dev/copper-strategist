@@ -83,11 +83,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    // TradingEconomics guest calendar (giới hạn requests nhưng miễn phí)
+    const credential = process.env.TRADINGECONOMICS_API_KEY;
+    if (!credential && !process.env.CALENDAR_PROVIDER_URL) {
+      throw new Error('Thiếu TRADINGECONOMICS_API_KEY hoặc CALENDAR_PROVIDER_URL');
+    }
+
     const now = new Date();
     const to = new Date(now.getTime() + 7 * 24 * 3600 * 1000);
-    const url = `https://api.tradingeconomics.com/calendar/country/united%20states,china` +
-      `?c=guest:guest&d1=${now.toISOString().slice(0,10)}&d2=${to.toISOString().slice(0,10)}`;
+    const url = process.env.CALENDAR_PROVIDER_URL
+      || `https://api.tradingeconomics.com/calendar/country/united%20states,china` +
+         `?c=${encodeURIComponent(credential)}&d1=${now.toISOString().slice(0,10)}&d2=${to.toISOString().slice(0,10)}`;
 
     const resp = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (!resp.ok) throw new Error(`TE calendar ${resp.status}`);
@@ -100,7 +105,9 @@ export default async function handler(req, res) {
       throw new Error(`TE calendar returned non-JSON: ${parseErr.message}`);
     }
 
-    const events = (Array.isArray(raw) ? raw : [])
+    if (!Array.isArray(raw)) throw new Error('Calendar provider trả response không hợp lệ');
+
+    const events = raw
       .filter(e => isRelevant(e.Event || ''))
       .map(e => {
         const eventTime = new Date(e.Date);
@@ -118,6 +125,7 @@ export default async function handler(req, res) {
           date:        eventTime.toLocaleDateString('vi-VN'),
           forecast:    e.Forecast ?? null,
           prev:        e.Previous ?? null,
+          timestamp:   eventTime.getTime(),
           minutesUntil,
           affectsCu:   classifyImpact(rawName),          // FIX-1: không còn phụ thuộc actual
         };
@@ -127,26 +135,23 @@ export default async function handler(req, res) {
       .sort((a, b) => a.minutesUntil - b.minutesUntil)
       .slice(0, 10);
 
-    const data = { events, source: 'tradingeconomics' };
+    const data = { events, source: process.env.CALENDAR_PROVIDER_URL ? 'custom-provider' : 'tradingeconomics' };
     CACHE.set(cacheKey, { data, ts: Date.now() });
     return res.status(200).json(data);
 
   } catch (e) {
     console.warn('[/api/calendar]', e.message);
-    // Fallback giữ nguyên shape { events, error, source } như bản gốc.
-    // Bổ sung thêm 1 sự kiện China PMI để khớp đủ 5 dòng của SENSITIVITY_MATRIX
-    // (CPI, China PMI, Fed Rate, LME stocks, ISM Mfg) — thuần additive.
+    const fallbackNow = Date.now();
+    // Giữ dữ liệu tham khảo cho simulator, nhưng đánh dấu estimate và không
+    // cho phép dùng làm cảnh báo thời gian thực.
     return res.status(200).json({
       events: [
-        { name:'CPI (CPI Mỹ YoY)', impact:'high', time:'21:30', date:'Hôm nay',
-          forecast:'3.1%', prev:'3.3%', minutesUntil: 102, affectsCu:'bearish_if_high' },
-        { name:'Fed Rate Decision (Fed Minutes)', impact:'high', time:'03:00', date:'Ngày mai',
-          forecast:'', prev:'', minutesUntil: 480, affectsCu:'bullish_if_dovish' },
-        { name:'ISM Manufacturing PMI (ISM Manufacturing PMI)', impact:'medium', time:'15:30', date:'T6 tuần này',
-          forecast:'48.5', prev:'48.7', minutesUntil: 2400, affectsCu:'bullish_if_beat' },
-        { name:'China PMI (Caixin China PMI)', impact:'high', time:'09:30', date:'T2 tới',
-          forecast:'51.2', prev:'50.8', minutesUntil: 4200, affectsCu:'bullish_if_beat' },
+        { name:'CPI (CPI Mỹ YoY)', impact:'high', time:'', date:'', forecast:'3.1%', prev:'3.3%', minutesUntil:null, affectsCu:'bearish_if_high', isFallback:true },
+        { name:'Fed Rate Decision (Fed Minutes)', impact:'high', time:'', date:'', forecast:'', prev:'', minutesUntil:null, affectsCu:'bullish_if_dovish', isFallback:true },
+        { name:'ISM Manufacturing PMI (ISM Manufacturing PMI)', impact:'medium', time:'', date:'', forecast:'48.5', prev:'48.7', minutesUntil:null, affectsCu:'bullish_if_beat', isFallback:true },
+        { name:'China PMI (Caixin China PMI)', impact:'high', time:'', date:'', forecast:'51.2', prev:'50.8', minutesUntil:null, affectsCu:'bullish_if_beat', isFallback:true },
       ],
+      asOf: fallbackNow,
       error: e.message, source: 'fallback',
     });
   }
