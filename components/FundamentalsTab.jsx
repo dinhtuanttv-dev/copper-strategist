@@ -1128,7 +1128,7 @@ export default function FundamentalsTab({ s, mh, pci }) {
 
   return (
 
-    <div style={{ display:'grid', gap:10 }}>
+    <div className="fundamentals-tab" style={{ display:'grid', gap:10 }}>
 
 
 

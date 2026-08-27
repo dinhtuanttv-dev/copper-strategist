@@ -70,7 +70,7 @@ export default function TrapZoneWidget() {
   const selectedRange = selectedZone?.range;
 
   return (
-    <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '13px 15px' }}>
+    <div className="trap-zone" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: '13px 15px' }}>
       {/* Banner cảnh báo đếm ngược */}
       <div style={{
         background: 'rgba(186,117,23,0.12)', border: '1px solid rgba(186,117,23,0.4)', borderRadius: 10,
@@ -92,7 +92,7 @@ export default function TrapZoneWidget() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
+      <div className="trap-zone-content" style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 12 }}>
         {/* Bảng ma trận */}
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, marginBottom: 2 }}>📊 MA TRẬN VÙNG THAO TÚNG & KỊCH BẢN</div>

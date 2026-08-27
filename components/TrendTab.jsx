@@ -1230,7 +1230,7 @@ export default function TrendTab({ s, verdict, bias }) {
   const TF_LIST = ['MN','W','D','H4','H1','M15'];
 
   return (
-    <div style={{ display:'grid', gap:8, width:'100%', boxSizing:'border-box' }}>
+    <div className="trend-tab" style={{ display:'grid', gap:8, width:'100%', boxSizing:'border-box' }}>
 
       {/* ── Timeframe bar ── */}
       <div style={{ display:'flex', gap:4, alignItems:'center',
@@ -1277,7 +1277,7 @@ export default function TrendTab({ s, verdict, bias }) {
       {shortSetup?.active && <ShortSetupPanel ss={shortSetup}/>}
 
       {/* ── 3-col layout FINAL FIX ── */}
-      <div style={{
+      <div className="trend-columns" style={{
         display:'grid',
         gridTemplateColumns:'minmax(160px,22%) minmax(0,1fr) minmax(160px,22%)',
         gap:8,

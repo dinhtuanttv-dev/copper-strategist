@@ -54,6 +54,7 @@
 html {
   font-size: 16px;
   scroll-behavior: smooth;
+  overflow-x: hidden;
 }
 
 body {
@@ -63,6 +64,29 @@ body {
   line-height: 1.6;
   min-height:  100vh;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Keep intrinsic content from forcing a grid/flex column wider than its container. */
+.app-shell, .app-content, .trend-tab, .trend-columns, .verdict-tab,
+.verdict-tab > *, .fundamentals-tab, .trap-zone, .trap-zone-content {
+  min-width: 0;
+}
+
+.app-content {
+  overflow-wrap: break-word;
+}
+
+img, svg, canvas, iframe {
+  max-width: 100%;
+}
+
+.recharts-responsive-container {
+  min-width: 0 !important;
+}
+
+button, input, select, textarea {
+  max-width: 100%;
 }
 
 /* ─── Scrollbar tùy chỉnh ────────────────────────────────── */
@@ -171,7 +195,45 @@ input:focus, textarea:focus {
 @media (max-width: 768px) {
   html { font-size: 14px; }
 
+  .app-header { padding: 8px 12px !important; }
+  .app-tabs { padding: 0 6px !important; scrollbar-width: none; }
+  .app-tabs::-webkit-scrollbar { display: none; }
+  .app-tabs button { flex: 0 0 auto; min-height: 42px; padding: 10px 11px !important; }
+  .app-content { padding: 10px 8px !important; }
+
+  /* The dashboard changes from side-by-side panels to a clear reading order. */
+  .trend-columns,
+  .verdict-row-a,
+  .verdict-row-b,
+  .verdict-row-c,
+  .verdict-row-d,
+  .verdict-row-e,
+  .trap-zone-content {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .trend-columns > *, .verdict-tab > *, .trap-zone-content > * {
+    min-width: 0;
+  }
+
+  .trend-tab svg, .verdict-tab svg, .fundamentals-tab svg, .trap-zone svg {
+    max-width: 100%;
+  }
+
+  /* Tables remain readable through intentional horizontal scrolling, not page overflow. */
+  .trap-zone [style*='overflowX'] { -webkit-overflow-scrolling: touch; }
+
   .hide-mobile { display: none !important; }
+}
+
+@media (max-width: 480px) {
+  .app-header > div:first-child { min-width: 0; }
+  .app-header > div:first-child > div:last-child { min-width: 0; }
+  .app-header { gap: 6px !important; }
+  .app-content { padding-left: 6px !important; padding-right: 6px !important; }
+
+  /* Card content has enough room while keeping the mobile interface compact. */
+  .trend-tab > div, .verdict-tab > div, .fundamentals-tab > div { min-width: 0; }
 }
 
 @media (min-width: 769px) {

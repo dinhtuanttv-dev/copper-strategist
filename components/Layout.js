@@ -104,14 +104,14 @@ export default function Layout({ children, tab, onTabChange, priceData, verdict 
   const vCol = v>=70?A.green:v>=55?A.amber:v>=40?A.orange:A.red;
 
   return (
-    <div style={{ minHeight:'100vh', background:'#040b14', color:'#e2e8f0',
+    <div className="app-shell" style={{ minHeight:'100vh', background:'#040b14', color:'#e2e8f0',
       fontFamily:'system-ui,-apple-system,sans-serif' }}>
 
       {/* ── Price Ticker ── */}
       <PriceTicker priceData={priceData}/>
 
       {/* ── Header ── */}
-      <div style={{ background:'#060d18', borderBottom:'1px solid #1e3050',
+      <div className="app-header" style={{ background:'#060d18', borderBottom:'1px solid #1e3050',
         padding:'8px 16px', display:'flex',
         alignItems:'center', justifyContent:'space-between',
         flexWrap:'wrap', gap:8 }}>
@@ -169,7 +169,7 @@ export default function Layout({ children, tab, onTabChange, priceData, verdict 
       </div>
 
       {/* ── Tab Nav ── */}
-      <div style={{ background:'#060d18', borderBottom:'1px solid #1e3050',
+      <div className="app-tabs" style={{ background:'#060d18', borderBottom:'1px solid #1e3050',
         padding:'0 12px', display:'flex', gap:2, overflowX:'auto' }}>
         {TABS.map((t, i) => (
           <button key={i} onClick={() => onTabChange?.(i)} style={{
@@ -185,10 +185,10 @@ export default function Layout({ children, tab, onTabChange, priceData, verdict 
       </div>
 
       {/* ── Content ── */}
-      <div style={{ maxWidth:1400, margin:'0 auto',
+      <main className="app-content" style={{ maxWidth:1400, margin:'0 auto',
         padding:'12px 14px', boxSizing:'border-box' }}>
         {children}
-      </div>
+      </main>
 
       <style>{`
         * { box-sizing:border-box; }

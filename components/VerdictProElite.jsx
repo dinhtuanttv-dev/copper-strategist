@@ -61,7 +61,7 @@ export default function VerdictProElite({ s, ew, vsa, wyckoff, mh, verdict, atr,
   }, [rawData?.calendar, now]);
 
   return (
-    <div style={{ display:'grid', gap:8, width:'100%', boxSizing:'border-box' }}>
+    <div className="verdict-tab" style={{ display:'grid', gap:8, width:'100%', boxSizing:'border-box' }}>
 
       {/* ── TOP BAR ── */}
       <div style={{ background:C.bg, border:`1px solid ${C.grid}`, borderRadius:10, padding:'8px 12px' }}>
@@ -98,7 +98,7 @@ export default function VerdictProElite({ s, ew, vsa, wyckoff, mh, verdict, atr,
       {nextHighEvent && <PreEventAlert event={nextHighEvent} atr={atr} comex={s?.comex} C={C} />}
 
       {/* ── ROW A: Regime + Conviction + Readiness ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'150px 1fr 1fr', gap:8 }}>
+      <div className="verdict-row-a" style={{ display:'grid', gridTemplateColumns:'150px 1fr 1fr', gap:8 }}>
         <RegimeCard regime={regime} C={C} />
         <ConvictionMeterCard conviction={conviction} scenarios={scenarios} C={C} />
         <TradeReadinessCard readiness={readiness} C={C} />
@@ -112,14 +112,14 @@ export default function VerdictProElite({ s, ew, vsa, wyckoff, mh, verdict, atr,
       }}>
         📊 3 kịch bản thị trường — dữ liệu thực từ CME · CFTC · FRED · LME · SHFE
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+      <div className="verdict-row-b" style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
         <ScenarioCard type="bull" data={scenarios?.bull} C={C} />
         <ScenarioCard type="base" data={scenarios?.base} C={C} />
         <ScenarioCard type="bear" data={scenarios?.bear} C={C} />
       </div>
 
       {/* ── ROW C: Event Impact + Sensitivity Matrix / Black Swan ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+      <div className="verdict-row-c" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
         <EventImpactCard calendar={rawData?.calendar} comex={s?.comex} atr={atr} C={C} />
         <div style={{ display:'grid', gap:8 }}>
           <SensitivityMatrixCard C={C} />
@@ -128,7 +128,7 @@ export default function VerdictProElite({ s, ew, vsa, wyckoff, mh, verdict, atr,
       </div>
 
       {/* ── ROW D: Copper Intel + Smart News + Position Sizing ── */}
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
+      <div className="verdict-row-d" style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8 }}>
         <CopperIntelCard copperIntel={copperIntel} C={C} />
         <SmartNewsCard news={scoredNews} C={C} />
         <div style={{ display:'grid', gap:8 }}>
@@ -144,7 +144,7 @@ export default function VerdictProElite({ s, ew, vsa, wyckoff, mh, verdict, atr,
       }}>
         🎯 Tầng 3 — Lợi thế hành vi &amp; timing
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+      <div className="verdict-row-e" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
         <SmartMoneyCard divergence={smartMoneyDivergence} C={C} />
         <SeasonalCard seasonal={seasonal} C={C} />
       </div>
