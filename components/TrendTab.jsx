@@ -8,6 +8,7 @@ import { useAnalysisController, DEFAULT_LAYERS } from '../hooks/useAnalysisContr
 import { calcShortSetup }        from '../lib/calculations';
 import SignalLog                 from './SignalLog';
 import IMHeatmap                 from './IMHeatmap';
+import TVChart                   from './TVChart';
 
 // ─── Colors ───────────────────────────────────────────────────────────────────
 const C = {
@@ -93,8 +94,11 @@ function ToggleSwitch({ label, active, onChange, col, small }) {
 function CandleChart({ bars, activeTF, isLoading, ew, smcData, showFib, showSMC }) {
   const W=580, H=260, P={t:14,r:54,b:26,l:4};
   const iw=W-P.l-P.r, ih=H-P.t-P.b;
+  const [visibleCount, setVisibleCount] = useState(60);
+  const [offset, setOffset] = useState(0);
+  const dragRef = useRef(null);
 
-  const data = useMemo(()=>{
+  const allData = useMemo(()=>{
     if (!bars?.length) return [];
     return bars
       .filter(b => b && b.comex > 0)
@@ -107,9 +111,43 @@ function CandleChart({ bars, activeTF, isLoading, ew, smcData, showFib, showSMC 
         v: b.vol || 0,
       }))
       .sort((a,b)=>a.t-b.t)
-      .filter((v,i,a)=>i===0||v.t!==a[i-1].t)
-      .slice(-80);
+      .filter((v,i,a)=>i===0||v.t!==a[i-1].t);
   },[bars]);
+
+  const effectiveCount = Math.max(12, Math.min(visibleCount, allData.length || 12));
+  const maxOffset = Math.max(0, allData.length - effectiveCount);
+  const effectiveOffset = Math.min(offset, maxOffset);
+  const start = Math.max(0, allData.length - effectiveCount - effectiveOffset);
+  const data = allData.slice(start, start + effectiveCount);
+
+  const resetViewport = () => {
+    setVisibleCount(60);
+    setOffset(0);
+  };
+
+  const handleWheel = event => {
+    event.preventDefault();
+    setVisibleCount(current => Math.max(12, Math.min(allData.length || 12,
+      current + (event.deltaY > 0 ? 8 : -8))));
+  };
+
+  const handlePointerDown = event => {
+    dragRef.current = { x:event.clientX, offset:effectiveOffset };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  };
+
+  const handlePointerMove = event => {
+    const drag = dragRef.current;
+    if (!drag) return;
+    const candlesPerPixel = effectiveCount / Math.max(event.currentTarget.clientWidth, 1);
+    const next = Math.round(drag.offset + (drag.x - event.clientX) * candlesPerPixel);
+    setOffset(Math.max(0, Math.min(maxOffset, next)));
+  };
+
+  const endDrag = event => {
+    dragRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
 
   // Loading state
   if (isLoading && data.length < 3) {
@@ -204,12 +242,21 @@ function CandleChart({ bars, activeTF, isLoading, ew, smcData, showFib, showSMC 
   }
 
   return (
-    <div style={{ width:'100%' }}>
+    <div className="interactive-candle-chart" style={{ width:'100%' }}>
       <svg
         viewBox={`0 0 ${W} ${H}`}
         width="100%"
         height={H}
-        style={{ background:C.bg, borderRadius:'7px 7px 0 0', display:'block' }}
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onDoubleClick={resetViewport}
+        role="application"
+        aria-label="Biểu đồ nến COMEX. Kéo ngang để xem dữ liệu trước đó, cuộn để phóng to hoặc thu nhỏ."
+        style={{ background:C.bg, borderRadius:'7px 7px 0 0', display:'block',
+          cursor:dragRef.current?'grabbing':'grab', touchAction:'none', userSelect:'none' }}
         preserveAspectRatio="none"
       >
         {/* Grid horizontal */}
@@ -303,7 +350,7 @@ function CandleChart({ bars, activeTF, isLoading, ew, smcData, showFib, showSMC 
       </svg>
 
       {/* Info bar */}
-      <div style={{
+      <div className="chart-status-bar" style={{
         display:'flex', gap:10, alignItems:'center',
         padding:'3px 8px', background:C.bg2,
         borderRadius:'0 0 7px 7px',
@@ -311,7 +358,7 @@ function CandleChart({ bars, activeTF, isLoading, ew, smcData, showFib, showSMC 
         fontSize:8,
       }}>
         <span style={{ color:C.muted }}>{activeTF}</span>
-        <span style={{ color:C.muted }}>{data.length} nến</span>
+        <span style={{ color:C.muted }}>{data.length}/{allData.length} nến</span>
         <span style={{ ...mono, color:isUp?C.green:C.red }}>
           {isUp?'▲':'▼'}{Math.abs(chgPct).toFixed(2)}%
         </span>
@@ -319,7 +366,7 @@ function CandleChart({ bars, activeTF, isLoading, ew, smcData, showFib, showSMC 
           H:{last.h.toFixed(3)} L:{last.l.toFixed(3)}
         </span>
         <span style={{ color:C.grid, marginLeft:'auto' }}>
-          📊 Yahoo Finance · HG=F
+          Kéo ↔ · Cuộn zoom · Chạm đúp reset
         </span>
         {isLoading&&(
           <span style={{ color:C.amber, animation:'pulse 1s infinite' }}>
@@ -349,7 +396,7 @@ function PriceChart({ safeS, activeTF, ew, smcData, onSetDrawingTool }) {
   };
 
   return (
-    <div style={{
+    <div className="trend-price-chart" style={{
       background:C.bg, border:`1px solid ${C.grid}`,
       borderRadius:11, padding:'11px 13px',
     }}>
@@ -449,7 +496,7 @@ function PriceChart({ safeS, activeTF, ew, smcData, onSetDrawingTool }) {
       )}
 
       {/* SVG Chart — nhận bars trực tiếp */}
-      <CandleChart
+      <TVChart
         bars={bars}
         activeTF={activeTF}
         isLoading={loading}
@@ -457,6 +504,7 @@ function PriceChart({ safeS, activeTF, ew, smcData, onSetDrawingTool }) {
         smcData={smcData}
         showFib={showFib}
         showSMC={showSMC}
+        showVolume
       />
     </div>
   );

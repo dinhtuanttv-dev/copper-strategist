@@ -87,6 +87,38 @@ img, svg, canvas, iframe {
   min-width: 0 !important;
 }
 
+.lightweight-chart {
+  overflow: hidden;
+  border: 1px solid #1e3050;
+  border-radius: 8px;
+  background: #060d18;
+}
+
+.lightweight-chart-host {
+  width: 100%;
+  min-height: 330px;
+  touch-action: pan-y pinch-zoom;
+}
+
+.chart-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  padding: 4px 8px;
+  border-top: 1px solid #1e3050;
+  background: #0a1520;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.chart-status-bar a {
+  margin-left: auto;
+  color: var(--cyan);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
 button, input, select, textarea {
   max-width: 100%;
 }
@@ -127,6 +159,15 @@ button:focus-visible {
   .verdict-row-b,
   .verdict-row-d {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 1025px) {
+  /* Keep the decision surface in view while its supporting panels are reviewed. */
+  .trend-price-chart {
+    position: sticky;
+    top: 48px;
+    z-index: 4;
   }
 }
 
@@ -291,6 +332,15 @@ input:focus, textarea:focus {
 
   .trend-tab svg, .verdict-tab svg, .fundamentals-tab svg, .trap-zone svg {
     max-width: 100%;
+  }
+
+  .interactive-candle-chart svg { min-height: 220px; }
+  .lightweight-chart-host { min-height: 280px; }
+  .chart-status-bar {
+    gap: 6px !important;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Tables remain readable through intentional horizontal scrolling, not page overflow. */
