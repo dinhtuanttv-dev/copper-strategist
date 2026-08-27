@@ -28,7 +28,7 @@ function PriceTicker({ priceData }) {
   const up     = (s.comex_chg_pct||0) >= 0;
   const comex  = s.comex?.toFixed(3) || '6.070';
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:12,
+    <div className="price-ticker" style={{ display:'flex', alignItems:'center', gap:12,
       padding:'4px 14px', background:'#060d18',
       borderBottom:'1px solid #1e3050', fontSize:10, flexWrap:'wrap' }}>
       <span style={{ color:A.muted, fontWeight:700, fontSize:9 }}>
@@ -169,7 +169,7 @@ export default function Layout({ children, tab, onTabChange, priceData, verdict 
       </div>
 
       {/* ── Tab Nav ── */}
-      <div className="app-tabs" style={{ background:'#060d18', borderBottom:'1px solid #1e3050',
+      <nav aria-label="Điều hướng bảng điều khiển" className="app-tabs" style={{ background:'#060d18', borderBottom:'1px solid #1e3050',
         padding:'0 12px', display:'flex', gap:2, overflowX:'auto' }}>
         {TABS.map((t, i) => (
           <button key={i} onClick={() => onTabChange?.(i)} style={{
@@ -182,7 +182,7 @@ export default function Layout({ children, tab, onTabChange, priceData, verdict 
             {t.icon} {t.label}
           </button>
         ))}
-      </div>
+      </nav>
 
       {/* ── Content ── */}
       <main className="app-content" style={{ maxWidth:1400, margin:'0 auto',

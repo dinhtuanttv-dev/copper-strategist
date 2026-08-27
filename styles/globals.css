@@ -55,6 +55,7 @@ html {
   font-size: 16px;
   scroll-behavior: smooth;
   overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -75,6 +76,7 @@ body {
 
 .app-content {
   overflow-wrap: break-word;
+  width: min(100%, 1400px);
 }
 
 img, svg, canvas, iframe {
@@ -87,6 +89,45 @@ img, svg, canvas, iframe {
 
 button, input, select, textarea {
   max-width: 100%;
+}
+
+/* A predictable touch surface prevents accidental page zoom/sideways panning. */
+.app-shell {
+  min-height: 100dvh;
+  touch-action: pan-y pinch-zoom;
+}
+
+.app-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+
+.app-tabs button:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1024px) {
+  .app-content { padding: 11px 12px !important; }
+
+  /* Tablet: preserve useful chart width, then place supporting analysis underneath. */
+  .trend-columns {
+    grid-template-columns: minmax(190px, .8fr) minmax(0, 1.45fr) !important;
+  }
+  .trend-columns > :last-child {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .verdict-row-a,
+  .verdict-row-b,
+  .verdict-row-d {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
 }
 
 /* ─── Scrollbar tùy chỉnh ────────────────────────────────── */
@@ -196,10 +237,23 @@ input:focus, textarea:focus {
   html { font-size: 14px; }
 
   .app-header { padding: 8px 12px !important; }
+  .price-ticker {
+    gap: 7px !important;
+    padding: 5px 10px !important;
+    min-height: 30px;
+  }
+  .price-ticker > :nth-child(n+4) { display: none; }
   .app-tabs { padding: 0 6px !important; scrollbar-width: none; }
   .app-tabs::-webkit-scrollbar { display: none; }
   .app-tabs button { flex: 0 0 auto; min-height: 42px; padding: 10px 11px !important; }
   .app-content { padding: 10px 8px !important; }
+  .dashboard-actions {
+    align-items: stretch !important;
+    gap: 6px !important;
+    padding: 7px 8px !important;
+  }
+  .dashboard-actions > button:first-child { flex: 1 0 100%; justify-content: center; }
+  .dashboard-actions > div:last-child { margin-left: 0 !important; width: 100%; justify-content: space-between; }
 
   /* Mobile is a decision screen: retain the three actionable market metrics only. */
   .market-metrics {
@@ -226,6 +280,11 @@ input:focus, textarea:focus {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
+  .trend-columns > :last-child {
+    grid-column: auto;
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
   .trend-columns > *, .verdict-tab > *, .trap-zone-content > * {
     min-width: 0;
   }
@@ -245,6 +304,8 @@ input:focus, textarea:focus {
   .app-header > div:first-child > div:last-child { min-width: 0; }
   .app-header { gap: 6px !important; }
   .app-content { padding-left: 6px !important; padding-right: 6px !important; }
+  .price-ticker > :nth-child(n+3) { display: none; }
+  .dashboard-actions > button { flex: 1 1 auto; justify-content: center; }
 
   /* Card content has enough room while keeping the mobile interface compact. */
   .trend-tab > div, .verdict-tab > div, .fundamentals-tab > div { min-width: 0; }

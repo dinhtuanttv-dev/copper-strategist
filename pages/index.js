@@ -806,7 +806,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
     <Layout tab={tab} onTabChange={setTab} priceData={s} verdict={verdict}>
 
       {/* ── Action bar ── */}
-      <div style={{ display:'flex', gap:8, alignItems:'center',
+      <div className="dashboard-actions" style={{ display:'flex', gap:8, alignItems:'center',
         flexWrap:'wrap', marginBottom:8, background:'var(--card)',
         borderRadius:10, padding:'8px 12px',
         border:'1px solid var(--border)' }}>
