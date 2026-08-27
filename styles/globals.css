@@ -201,6 +201,20 @@ input:focus, textarea:focus {
   .app-tabs button { flex: 0 0 auto; min-height: 42px; padding: 10px 11px !important; }
   .app-content { padding: 10px 8px !important; }
 
+  /* Mobile is a decision screen: retain the three actionable market metrics only. */
+  .market-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    margin-bottom: 10px !important;
+  }
+  .market-metric-card { min-width: 0; padding: 7px 6px !important; }
+  .market-metric-card[data-metric='pk1'],
+  .market-metric-card[data-metric='pk2'],
+  .market-metric-card[data-metric='elliott'],
+  .market-metric-card[data-metric='vsa'],
+  .market-metric-card[data-metric='curve'] { display: none; }
+  .market-metric-card > div:nth-child(2) { font-size: 13px !important; }
+
   /* The dashboard changes from side-by-side panels to a clear reading order. */
   .trend-columns,
   .verdict-row-a,

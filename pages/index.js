@@ -836,10 +836,10 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
       />
 
       {/* ── Metric cards ── */}
-      <div style={{ display:'grid',
+      <div className="market-metrics" style={{ display:'grid',
         gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))',
         gap:8, marginBottom:12 }}>
-        <div style={{ background:'var(--card2)',
+        <div className="market-metric-card" data-metric="comex" style={{ background:'var(--card2)',
           border:'1px solid var(--border)', borderRadius:8, padding:'8px 10px' }}>
           <div style={{ display:'flex', alignItems:'center',
             justifyContent:'space-between', marginBottom:2 }}>
@@ -866,7 +866,7 @@ COMEX: $${s.comex?.toFixed(3)}/lb | PK1: ${ti.pk1Score} | PK2: ${mh.pk2Score} | 
           {lbl:'Curve',   val:curveInfo.type==='BACKWARDATION'?'BACK':'CONT',
            col:curveInfo.col},
         ].map((m,i) => (
-          <div key={i} style={{ background:'var(--card2)',
+          <div key={i} className="market-metric-card" data-metric={m.lbl.toLowerCase()} style={{ background:'var(--card2)',
             border:'1px solid var(--border)', borderRadius:8, padding:'8px 10px' }}>
             <div style={{ fontSize:8, color:'var(--muted)', marginBottom:2 }}>
               {m.lbl}
