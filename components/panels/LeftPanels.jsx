@@ -5,14 +5,16 @@ import { Bdg, Panel, SBar } from '../ui/Primitives';
 
 export function FibPanel({ safeS, ew, activeTF }) {
   const cu = safeS.comex||6.07;
+  // Guard: ew có thể null khi mount sớm hoặc chưa tính toán xong
+  const safeEw = ew || {};
   const levels = [
-    { lbl:'Fib 1.618 — TP3',  price:ew.w3Target||+(cu*1.10).toFixed(3),  tag:'TP3',   col:C.cyan  },
-    { lbl:'Fib 1.272 — TP2',  price:safeS.tp2||+(cu*1.058).toFixed(3),   tag:'TP2',   col:C.teal  },
-    { lbl:'Fib 1.000 — TP1',  price:safeS.tp1||+(cu*1.025).toFixed(3),   tag:'TP1',   col:C.green },
-    { lbl:'▶ Giá Hiện Tại',   price:cu,                                   tag:'NOW',   col:C.blue  },
-    { lbl:'Fib 0.500 — Entry',price:ew.fib500||+(cu*0.985).toFixed(3),   tag:'Entry', col:C.green },
-    { lbl:'Fib 0.618 — SL–',  price:ew.fib618||+(cu*0.975).toFixed(3),   tag:'SL–',   col:C.amber },
-    { lbl:'Fib 0.786 — SL=',  price:ew.fib786||+(cu*0.960).toFixed(3),   tag:'SL=',   col:C.red   },
+    { lbl:'Fib 1.618 — TP3',  price:safeEw.w3Target||+(cu*1.10).toFixed(3),  tag:'TP3',   col:C.cyan  },
+    { lbl:'Fib 1.272 — TP2',  price:safeS.tp2||+(cu*1.058).toFixed(3),       tag:'TP2',   col:C.teal  },
+    { lbl:'Fib 1.000 — TP1',  price:safeS.tp1||+(cu*1.025).toFixed(3),       tag:'TP1',   col:C.green },
+    { lbl:'▶ Giá Hiện Tại',   price:cu,                                       tag:'NOW',   col:C.blue  },
+    { lbl:'Fib 0.500 — Entry',price:safeEw.fib500||+(cu*0.985).toFixed(3),   tag:'Entry', col:C.green },
+    { lbl:'Fib 0.618 — SL–',  price:safeEw.fib618||+(cu*0.975).toFixed(3),   tag:'SL–',   col:C.amber },
+    { lbl:'Fib 0.786 — SL=',  price:safeEw.fib786||+(cu*0.960).toFixed(3),   tag:'SL=',   col:C.red   },
   ].sort((a,b)=>b.price-a.price);
 
   const tagCol = {

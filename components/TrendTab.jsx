@@ -4,7 +4,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { useTrendEngine } from '../hooks/useTrendEngine';
 import { useChartData }          from '../hooks/useChartData';
-import { useAnalysisController } from '../hooks/useAnalysisController';
+import { useAnalysisController, DEFAULT_LAYERS } from '../hooks/useAnalysisController';
 import { calcShortSetup }        from '../lib/calculations';
 import SignalLog                 from './SignalLog';
 import IMHeatmap                 from './IMHeatmap';
@@ -18,11 +18,6 @@ const C = {
 };
 const mono = { fontFamily:'monospace' };
 const sc   = v => v>=70?C.green:v>=50?C.amber:C.red;
-
-const DEFAULT_LAYERS = {
-  smc:true, wyckoff:true, fib:true, elliott:true,
-  vsa:true, harmonic:false, ai_detection:true,
-};
 
 // ─── Micro UI ─────────────────────────────────────────────────────────────────
 function Bdg({ label, col, size=8 }) {
@@ -627,7 +622,8 @@ function detectPatterns(bars, ew, vsa, price) {
 function PatternScanner({ bars, ew, vsa, safeS }) {
   const [tf,   setTF]   = useState('all');
   const [dir,  setDir]  = useState('all');
-  const [minP, setMinP] = useState(60);
+  // FIX: minP=55 để hiển thị nhiều mô hình hơn (prob range 58-75)
+  const [minP, setMinP] = useState(55);
 
   const all = useMemo(()=>
     detectPatterns(bars, ew, vsa, safeS.comex),
@@ -742,14 +738,16 @@ function PatternScanner({ bars, ew, vsa, safeS }) {
 // ─── FibPanel ─────────────────────────────────────────────────────────────────
 function FibPanel({ safeS, ew, activeTF }) {
   const cu = safeS.comex||6.07;
+  // Guard: ew có thể null khi mount sớm
+  const safeEw = ew || {};
   const rows = [
-    { lbl:'Fib 1.618 — TP3',  p:ew.w3Target||+(cu*1.10).toFixed(3),  tag:'TP3',   col:C.cyan  },
-    { lbl:'Fib 1.272 — TP2',  p:safeS.tp2||+(cu*1.058).toFixed(3),   tag:'TP2',   col:C.teal  },
-    { lbl:'Fib 1.000 — TP1',  p:safeS.tp1||+(cu*1.025).toFixed(3),   tag:'TP1',   col:C.green },
-    { lbl:'▶ Giá Hiện Tại',   p:cu,                                   tag:'NOW',   col:C.blue  },
-    { lbl:'Fib 0.500 — Entry',p:ew.fib500||+(cu*0.985).toFixed(3),   tag:'Entry', col:C.green },
-    { lbl:'Fib 0.618 — SL–',  p:ew.fib618||+(cu*0.975).toFixed(3),   tag:'SL–',   col:C.amber },
-    { lbl:'Fib 0.786 — SL=',  p:ew.fib786||+(cu*0.960).toFixed(3),   tag:'SL=',   col:C.red   },
+    { lbl:'Fib 1.618 — TP3',  p:safeEw.w3Target||+(cu*1.10).toFixed(3),  tag:'TP3',   col:C.cyan  },
+    { lbl:'Fib 1.272 — TP2',  p:safeS.tp2||+(cu*1.058).toFixed(3),       tag:'TP2',   col:C.teal  },
+    { lbl:'Fib 1.000 — TP1',  p:safeS.tp1||+(cu*1.025).toFixed(3),       tag:'TP1',   col:C.green },
+    { lbl:'▶ Giá Hiện Tại',   p:cu,                                       tag:'NOW',   col:C.blue  },
+    { lbl:'Fib 0.500 — Entry',p:safeEw.fib500||+(cu*0.985).toFixed(3),   tag:'Entry', col:C.green },
+    { lbl:'Fib 0.618 — SL–',  p:safeEw.fib618||+(cu*0.975).toFixed(3),   tag:'SL–',   col:C.amber },
+    { lbl:'Fib 0.786 — SL=',  p:safeEw.fib786||+(cu*0.960).toFixed(3),   tag:'SL=',   col:C.red   },
   ].sort((a,b)=>b.p-a.p);
   const tc = { TP3:C.cyan,TP2:C.teal,TP1:C.green,NOW:C.blue,
     Entry:C.green,'SL–':C.amber,'SL=':C.red };
@@ -845,7 +843,9 @@ function MultiMethodPanel({ scores, bias, activeTF, shortSetup }) {
 
 // ─── WyckoffPanel ─────────────────────────────────────────────────────────────
 function WyckoffPanel({ wyckoff }) {
-  const isBear = wyckoff.phase==='DIST';
+  // Guard: wyckoff có thể undefined khi engine chưa sẵn sàng
+  const safeW = wyckoff || { phase:'A', label:'?', confidence:0, sub:'' };
+  const isBear = safeW.phase==='DIST';
   const col    = isBear?C.red:C.amber;
   const phases = isBear ? [
     { l:'Preliminary Supply', s:'PSY → BC',          done:true, act:false, c:C.red   },
@@ -855,19 +855,19 @@ function WyckoffPanel({ wyckoff }) {
     { l:'Markdown',           s:'Downtrend Phase',    done:false,act:false, c:C.muted },
   ] : [
     { l:'Phase A', s:'SC → AR → ST',
-      done:wyckoff.phase>='B', act:wyckoff.phase==='A', c:C.green },
+      done:safeW.phase>='B', act:safeW.phase==='A', c:C.green },
     { l:'Phase B', s:'UT · Secondary Tests',
-      done:wyckoff.phase>='C', act:wyckoff.phase==='B', c:C.green },
-    { l:'Phase C', s:wyckoff.sub||'Spring/Test',
-      done:wyckoff.phase>='D', act:wyckoff.phase==='C', c:C.amber },
+      done:safeW.phase>='C', act:safeW.phase==='B', c:C.green },
+    { l:'Phase C', s:safeW.sub||'Spring/Test',
+      done:safeW.phase>='D', act:safeW.phase==='C', c:C.amber },
     { l:'Phase D', s:'LPS → SOS Markup',
-      done:wyckoff.phase>='E', act:wyckoff.phase==='D', c:C.teal  },
+      done:safeW.phase>='E', act:safeW.phase==='D', c:C.teal  },
     { l:'Phase E', s:'Markup / Uptrend',
-      done:false,              act:wyckoff.phase==='E', c:C.cyan  },
+      done:false,             act:safeW.phase==='E', c:C.cyan  },
   ];
   return (
     <Panel title="WYCKOFF CYCLE" icon="🔄" glow={col}
-      badge={`${wyckoff.label||'?'} ${wyckoff.confidence||0}%`} badgeCol={col}>
+      badge={`${safeW.label||'?'} ${safeW.confidence||0}%`} badgeCol={col}>
       {phases.map((ph,i)=>(
         <div key={i} style={{
           display:'flex', gap:8, alignItems:'flex-start',
@@ -896,14 +896,20 @@ function WyckoffPanel({ wyckoff }) {
 // ─── SMCPanel ─────────────────────────────────────────────────────────────────
 function SMCPanel({ safeS, atr }) {
   const cu=safeS.comex||6.07, at=atr||0.12;
+  // FIX: adaptive ATR multiplier dựa trên volatility regime
+  const m = at > 0.2 ? 1.5 : at > 0.1 ? 1.2 : 1.0;
+  // Validate ranges: lower < upper
+  const lo1 = cu+at*m, hi1 = cu+at*1.8*m;
+  const lo2 = cu+at*.3*m, hi2 = cu+at*.7*m;
+  const lo4 = cu-at*2*m, hi4 = cu-at*m;
   return (
     <Panel title="SMC ORDER BLOCKS" icon="🔷" glow={C.blue}>
       {[
-        {l:'OB Giảm', r:`$${(cu+at).toFixed(3)}–$${(cu+at*1.8).toFixed(3)}`,   sig:'BÁN', col:C.red    },
-        {l:'FVG',     r:`$${(cu+at*.3).toFixed(3)}–$${(cu+at*.7).toFixed(3)}`, sig:'FVG', col:C.purple },
-        {l:'BOS ✓',   r:`$${(cu-at*.1).toFixed(3)} confirm`,                    sig:'BOS', col:C.green  },
-        {l:'OB Tăng', r:`$${(cu-at*2).toFixed(3)}–$${(cu-at).toFixed(3)}`,     sig:'MUA', col:C.green  },
-        {l:'Liquidity',r:`$${(cu-at*2.5).toFixed(3)}`,                          sig:'POOL',col:C.amber  },
+        {l:'OB Giảm',  r:`$${lo1.toFixed(3)}–$${hi1.toFixed(3)}`, sig:'BÁN',  col:C.red    },
+        {l:'FVG',      r:`$${lo2.toFixed(3)}–$${hi2.toFixed(3)}`, sig:'FVG',  col:C.purple },
+        {l:'BOS ✓',    r:`$${(cu-at*.1).toFixed(3)}`,              sig:'BOS',  col:C.green  },
+        {l:'OB Tăng',  r:`$${lo4.toFixed(3)}–$${hi4.toFixed(3)}`, sig:'MUA',  col:C.green  },
+        {l:'Liquidity',r:`$${(cu-at*2.5*m).toFixed(3)}`,          sig:'POOL', col:C.amber  },
       ].map((b,i)=>(
         <div key={i} style={{ padding:'5px 8px',borderRadius:7,marginBottom:4,
           background:C.bg2,border:`0.5px solid ${b.col}33` }}>
@@ -1022,6 +1028,10 @@ function AITongHop({ safeS,ew,vsa,wyckoff,scores,bias,activeTF,shortSetup,imSign
   const generate = useCallback(async()=>{
     setLoading(true); setErr('');
     try {
+      // FIX: defensive copies cho ew/vsa/wyckoff tránh null khi engine chưa ready
+      const safeEw      = ew      || { label:'?', prob:0, rsi:50 };
+      const safeVsa     = vsa     || { meta:{}, latestBar:{} };
+      const safeWyckoff = wyckoff || { label:'?', confidence:0 };
       const r = await fetch('/api/claude',{
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
@@ -1029,10 +1039,10 @@ function AITongHop({ safeS,ew,vsa,wyckoff,scores,bias,activeTF,shortSetup,imSign
           messages:[{ role:'user', content:
             `Chuyên gia phân tích kỹ thuật COMEX Copper.
 Tóm tắt ~80 từ tiếng Việt cho ${activeTF}:
-- Elliott: ${ew.label||'?'} (${ew.prob||0}%)
-- VSA: ${vsa.meta?.label||'N/A'} Vol=${vsa.latestBar?.volRatio||1}×
-- Wyckoff: ${wyckoff.label||'?'} (${wyckoff.confidence||0}%)
-- RSI=${ew.rsi||50} COMEX=$${(safeS.comex||6.07).toFixed(3)} Bias=${bias}/100${imSum?'\n- IM: '+imSum:''}
+- Elliott: ${safeEw.label||'?'} (${safeEw.prob||0}%)
+- VSA: ${safeVsa.meta?.label||'N/A'} Vol=${safeVsa.latestBar?.volRatio||1}×
+- Wyckoff: ${safeWyckoff.label||'?'} (${safeWyckoff.confidence||0}%)
+- RSI=${safeEw.rsi||50} COMEX=$${(safeS.comex||6.07).toFixed(3)} Bias=${bias||50}/100${imSum?'\n- IM: '+imSum:''}
 Kết luận entry tối ưu.`,
           }],
         }),
@@ -1183,11 +1193,13 @@ export default function TrendTab({ s, verdict, bias }) {
 
   const smcData = useMemo(()=>{
     const cu=safeS.comex||6.07, at=atr||0.12;
+    // FIX: adaptive ATR multiplier dựa trên volatility regime
+    const m = at > 0.2 ? 1.5 : at > 0.1 ? 1.2 : 1.0;
     return {
-      obBear:[cu+at,   cu+at*1.8],
-      obBull:[cu-at*2, cu-at],
-      fvg:  [cu+at*.3, cu+at*.7],
-      liq:   cu-at*2.5,
+      obBear:[cu+at*m, cu+at*1.8*m],
+      obBull:[cu-at*2*m, cu-at*m],
+      fvg:  [cu+at*.3*m, cu+at*.7*m],
+      liq:   cu-at*2.5*m,
     };
   },[safeS.comex,atr]);
 
@@ -1195,19 +1207,25 @@ export default function TrendTab({ s, verdict, bias }) {
     safeS,ew,vsa,verdict||{final:50},imSignals,atr
   ),[safeS,ew,vsa,verdict,imSignals,atr]);
 
-  const scores = useMemo(()=>[
-    { label:'Elliott Wave',    score:ew.score||50  },
-    { label:'VSA Engine',      score:vsa.score||50 },
-    { label:'Wyckoff Cycle',   score:wyckoff.confidence||50 },
-    { label:'SMC',             score:pk1.pk1Score>65?80:55 },
-    { label:'Harmonic',        score:72 },
-    { label:'Liên Thị Trường', score:imSignals
-        ? Math.round(
-            Object.values(imSignals).filter(s=>s.col===C.green).length
-            / Math.max(Object.keys(imSignals).length,1) * 100
-          )
-        : 60 },
-  ],[ew,vsa,wyckoff,pk1,imSignals]);
+  const scores = useMemo(()=>{
+    // FIX: dynamic threshold dựa trên timeframe — TF càng nhỏ thì threshold càng cao (nhiễu nhiều hơn)
+    const tfThreshold = { MN:55, W:60, D:65, H4:68, H1:70, M15:72 }[activeTF]||65;
+    // VSA không có .score — derive từ latestBar signals hoặc dùng default
+    const vsaScore = vsa?.score ?? (vsa?.latestBar?.volRatio>1.5?70:vsa?.latestBar?.volRatio<0.8?40:55);
+    return [
+      { label:'Elliott Wave',    score:ew?.score||50  },
+      { label:'VSA Engine',      score:vsaScore },
+      { label:'Wyckoff Cycle',   score:wyckoff?.confidence||50 },
+      { label:'SMC',             score:(pk1?.pk1Score||0)>tfThreshold?80:55, subTitle:activeTF },
+      { label:'Harmonic',        score:72 },
+      { label:'Liên Thị Trường', score:imSignals
+          ? Math.round(
+              Object.values(imSignals).filter(s=>s.col===C.green).length
+              / Math.max(Object.keys(imSignals).length,1) * 100
+            )
+          : 60 },
+    ];
+  },[ew,vsa,wyckoff,pk1,imSignals,activeTF]);
 
   const TF_LIST = ['MN','W','D','H4','H1','M15'];
 

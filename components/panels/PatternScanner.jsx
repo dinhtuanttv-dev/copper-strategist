@@ -51,7 +51,8 @@ export function detectPatterns(bars, ew, vsa, currentPrice) {
 export default function PatternScanner({ bars, ew, vsa, safeS }) {
   const [filterTF,  setFilterTF]  = useState('all');
   const [filterDir, setFilterDir] = useState('all');
-  const [minProb,   setMinProb]   = useState(60);
+  // FIX: minProb=55 để hiển thị nhiều mô hình hơn (prob range 58-75)
+  const [minProb,   setMinProb]   = useState(55);
 
   const allPatterns = useMemo(()=>
     detectPatterns(bars,ew,vsa,safeS.comex),

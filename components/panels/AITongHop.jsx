@@ -26,6 +26,10 @@ export default function AITongHop({ safeS, ew, vsa, wyckoff,
   const generate = useCallback(async()=>{
     setLoading(true);
     try {
+      // Guard: defensive copies tránh null/undefined khi engine chưa sẵn sàng
+      const safeEw      = ew      || { label:'?', prob:0, scenario:'', rsi:50, fib500:0, fib618:0 };
+      const safeVsa     = vsa     || { meta:{}, latestBar:{}, atr:0 };
+      const safeWyckoff = wyckoff || { label:'?', confidence:0 };
       const shortNote = shortSetup?.active
         ?`\nSHORT SETUP ACTIVE: Entry $${shortSetup.entry?.low}–$${shortSetup.entry?.high}, SL $${shortSetup.sl}, TP1 $${shortSetup.tp1}.`:'';
       const imNote = imSummary?`\nLiên thị trường: ${imSummary}.`:'';
@@ -36,19 +40,23 @@ export default function AITongHop({ safeS, ew, vsa, wyckoff,
           messages:[{ role:'user', content:
             `Bạn là chuyên gia phân tích kỹ thuật đồng COMEX.
 Tổng hợp tiếng Việt ~90 từ cho ${activeTF}:
-- Elliott: ${ew.label} (${ew.prob||0}%) — ${ew.scenario||''}
-- VSA: ${vsa.meta?.label} Vol=${vsa.latestBar?.volRatio||1}×
-- Wyckoff: ${wyckoff.label} (${wyckoff.confidence||0}%)
-- RSI=${ew.rsi||50} ATR=${vsa.atr?.toFixed(3)||0}
-- COMEX=$${(safeS.comex||6.07).toFixed(3)} Bias=${bias}/100 Confluence=${avg}/100${shortNote}${imNote}
+- Elliott: ${safeEw.label} (${safeEw.prob||0}%) — ${safeEw.scenario||''}
+- VSA: ${safeVsa.meta?.label} Vol=${safeVsa.latestBar?.volRatio||1}×
+- Wyckoff: ${safeWyckoff.label} (${safeWyckoff.confidence||0}%)
+- RSI=${safeEw.rsi||50} ATR=${safeVsa.atr?.toFixed(3)||0}
+- COMEX=$${(safeS.comex||6.07).toFixed(3)} Bias=${bias||50}/100 Confluence=${avg}/100${shortNote}${imNote}
 Kết luận: ${shortSetup?.active?'SHORT setup + ':''}entry/hành động tối ưu.`
           }],
         }),
       });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const d = await r.json();
       const t = (d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
       if (t) setText(t);
-    } catch(e){ console.error('[AITongHop]',e); }
+    } catch(e){
+      console.error('[AITongHop]',e);
+      setText('⚠️ Lỗi kết nối AI. Vui lòng thử lại.');
+    }
     finally{ setLoading(false); }
   },[ew,vsa,wyckoff,safeS,bias,avg,activeTF,shortSetup,imSummary]);
 
@@ -77,7 +85,7 @@ Kết luận: ${shortSetup?.active?'SHORT setup + ':''}entry/hành động tối
           {text
             ?<div style={{ fontSize:9,color:'#b0b8d0',lineHeight:1.7 }}>{text}</div>
             :<div style={{ fontSize:9,color:C.muted }}>
-              {ew.label} · {wyckoff.label} · {vsa.meta?.short}
+              {ew?.label||'?'} · {wyckoff?.label||'?'} · {vsa?.meta?.short||'VSA'}
               {imSummary&&<span style={{ color:C.cyan }}> · {imSummary}</span>}
               {shortSetup?.active&&
                 <span style={{ color:C.red,fontWeight:600 }}> · 📉 SHORT ACTIVE</span>}

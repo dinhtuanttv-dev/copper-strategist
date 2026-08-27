@@ -3,13 +3,8 @@ import { useState } from 'react';
 import { C } from '../constants/colors';
 import { Bdg, ToggleSwitch } from '../ui/Primitives';
 import { useChartData } from '../../hooks/useChartData';
+import { DEFAULT_LAYERS } from '../../hooks/useAnalysisController';
 import TVChart from '../TVChart';
-
-// ─── DEFAULT layers — tránh undefined crash ───────────────────────────────────
-const DEFAULT_LAYERS = {
-  smc:true, wyckoff:true, fib:true, elliott:true,
-  vsa:true, harmonic:false, ai_detection:true,
-};
 
 export function PriceChart({ safeS, activeTF, ew, vsa, smcData,
   chartContainerRef, ctrlLayers, onToggleLayer, onSetDrawingTool }) {

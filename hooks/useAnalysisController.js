@@ -57,3 +57,5 @@ export function useAnalysisController(chartRef) {
 }
 
 export default useAnalysisController;
+
+export { DEFAULT_LAYERS };
